@@ -50,7 +50,6 @@
         }
         .nav-btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
         .nav-btn.active { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 4px 12px var(--accent-glow); }
-
         main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
         .view { display: none; animation: fadeIn 0.3s ease; }
         .view.active { display: block; }
@@ -176,10 +175,8 @@
                 <button class="nav-btn" id="btn-expansions" onclick="showView('expansions')">Expansions</button>
                 <button class="nav-btn" id="btn-collection" onclick="showView('collection')">My Collection</button>
             </nav>
-
         </div>
     </header>
-
     <main>
         <div id="view-expansions" class="view active">
             <div class="section-header">
@@ -209,7 +206,6 @@
                 <div id="globalCardsContent"></div>
             </div>
         </div>
-
         <div id="view-cards" class="view">
             <button class="back-link" onclick="showView('expansions')">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 8H3M8 3l-5 5 5 5"/></svg>
@@ -238,7 +234,6 @@
                 <button class="page-btn" id="nextPage" onclick="changePage(1)">Next</button>
             </div>
         </div>
-
         <div id="view-collection" class="view">
             <div class="section-header">
                 <h2 class="section-title">My Collection</h2>
@@ -253,9 +248,6 @@
                 <div class="search-box">
                     <input type="text" id="collectionSearch" placeholder="Search collection..." oninput="renderCollection()">
                 </div>
-            <select class="filter-select" id="collectionLangFilter" onchange="renderCollection()">
-                <option value="">All Languages</option>
-            </select>
             </div>
             <div class="collection-sort">
                 Sort by:
@@ -270,81 +262,57 @@
             <div id="collectionContent"></div>
         </div>
     </main>
-
     <script>
-        const APIS = {
-            en: {
-                name: 'English',
-                sets: () => fetchJSON(`https://api.pokemontcg.io/v2/sets?pageSize=250&orderBy=-releaseDate`),
-                cards: async (setId, page, ps) => {
-                    let allData = [];
-                    let p = 1;
-                    const batchSize = 250;
-                    let totalCount = Infinity;
-                    while (allData.length < totalCount) {
-                        const raw = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${setId}&page=${p}&pageSize=${batchSize}&orderBy=number`);
-                        if (!raw.ok) throw new Error(`HTTP ${raw.status}`);
-                        const d = await raw.json();
-                        const cards = d.data || [];
-                        totalCount = d.totalCount || cards.length;
-                        allData = allData.concat(cards);
-                        p++;
-                    }
-                    return { data: allData, totalCount: allData.length };
-                },
-                setLogo: (s) => s.images?.logo,
-                setSymbol: (s) => s.images?.symbol,
-                cardImage: (c) => c.image,
-                cardImageLarge: (c) => c.imageLarge,
-                setMap: (s) => ({ id: s.id, name: s.name, total: s.total, series: s.series, releaseDate: s.releaseDate, logo: s.images?.logo, symbol: s.images?.symbol }),
-                cardMap: (c) => ({
-                    id: c.id, name: c.name, number: c.number, rarity: c.rarity,
-                    set: { id: c.set?.id || '', name: c.set?.name || '' },
-                    hp: c.hp, types: c.types, dexId: c.nationalPokedexNumbers?.[0],
-                    image: c.images?.small, imageLarge: c.images?.large,
-                    stage: c.stage, subtype: c.subtypes?.[0]
-                }),
-                mapCardId: (tcgSetId, num) => null,
-                hasBuiltInImages: true
-            }
-        };
-
         async function fetchJSON(url) {
             const r = await fetch(url);
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return r.json();
         }
 
-        let allSets = [];
-        let currentSet = null;
-        let allCards = [];
-        let totalCardCount = 0;
-        let currentPage = 1;
-        const perPage = 100;
-        let collection = JSON.parse(localStorage.getItem('pokemonCollection') || '{}');
-        let pokemonDexCache = {};
+        async function loadSets() {
+            document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading expansions...</span></div>';
+            try {
+                const data = await fetchJSON('https://api.pokemontcg.io/v2/sets?pageSize=250&orderBy=-releaseDate');
+                allSets = (data.data || []).map(s => ({
+                    id: s.id, name: s.name, total: s.total, series: s.series,
+                    releaseDate: s.releaseDate, logo: s.images?.logo, symbol: s.images?.symbol
+                }));
+                populateSeriesFilter();
+                renderExpansions(allSets);
+            } catch (e) {
+                document.getElementById('expansionsContent').innerHTML = `<div class="error-msg">Error loading expansions. ${e.message}</div>`;
+            }
+        }
 
-        const api = APIS.en;
+        function populateSeriesFilter() {
+            const series = [...new Set(allSets.map(s => s.series).filter(Boolean))].sort();
+            const sel = document.getElementById('seriesFilter');
+            sel.innerHTML = '<option value="">All Series</option>';
+            series.forEach(s => { sel.innerHTML += `<option value="${s}">${s}</option>`; });
+        }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSets();
-            loadDex();
-        });
+        function getOwnedCount(setId) { return Object.keys(collection).filter(id => collection[id]?.set?.id === setId).length; }
+
+        function filterExpansions() {
+            const search = document.getElementById('expansionSearch').value.toLowerCase();
+            const series = document.getElementById('seriesFilter').value;
+            const filtered = allSets.filter(s => {
+                const m1 = s.name.toLowerCase().includes(search) || (s.series || '').toLowerCase().includes(search);
+                const m2 = !series || s.series === series;
+                return m1 && m2;
+            });
             renderExpansions(filtered);
         }
 
         function renderExpansions(sets) {
             const c = document.getElementById('expansionsContent');
             if (!sets.length) { c.innerHTML = '<div class="empty-state"><h3>No expansions found</h3></div>'; return; }
-            const a = api;
             c.innerHTML = `<div class="expansions-grid">${sets.map(set => {
                 const owned = getOwnedCount(set.id);
                 const logo = set.logo;
                 return `<div class="expansion-card" onclick="openSet('${set.id.replace(/'/g, "\\'")}')">
                     <div class="expansion-logo-wrap">
-                        ${logo
-                            ? `<img src="${logo}" alt="${set.name}" onerror="this.parentElement.innerHTML='<span class=\\'no-logo\\'>${set.name || set.id}</span>'">`
-                            : `<span class="no-logo">${set.name || set.id}</span>`}
+                        ${logo ? `<img src="${logo}" alt="${set.name}" onerror="this.parentElement.innerHTML='<span class=\\'no-logo\\'>${set.name || set.id}</span>'">` : `<span class="no-logo">${set.name || set.id}</span>`}
                     </div>
                     <div class="expansion-info">
                         <div class="expansion-name">${set.name}</div>
@@ -369,38 +337,42 @@
             document.getElementById('cardSearch').value = '';
             document.getElementById('rarityFilter').innerHTML = '<option value="">All Rarities</option>';
             currentSet = setObj;
-
-            const a = api;
             try {
-                let allRawCards = [];
-                const setIds = setObj.ids || [setId];
-
-                for (const sid of setIds) {
-                    const res = await a.cards(sid, 1, perPage);
-                    allRawCards = allRawCards.concat(res.data || []);
+                let allData = [];
+                let p = 1, totalCount = Infinity;
+                while (allData.length < totalCount) {
+                    const raw = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${setId}&page=${p}&pageSize=250&orderBy=number`);
+                    if (!raw.ok) throw new Error(`HTTP ${raw.status}`);
+                    const d = await raw.json();
+                    const cards = d.data || [];
+                    totalCount = d.totalCount || cards.length;
+                    allData = allData.concat(cards);
+                    p++;
                 }
-                allCards = (allRawCards || []).map(c => a.cardMap(c, setObj));
-
+                allCards = allData.map(c => ({
+                    id: c.id, name: c.name, number: c.number, rarity: c.rarity,
+                    set: { id: c.set?.id || '', name: c.set?.name || '' },
+                    hp: c.hp, types: c.types, dexId: c.nationalPokedexNumbers?.[0],
+                    image: c.images?.small, imageLarge: c.images?.large,
+                    stage: c.stage, subtype: c.subtypes?.[0]
+                }));
                 const setTotal = currentSet?.total || 0;
                 allCards.forEach(card => {
-                    if (!card.rarity || card.rarity === '') {
+                    if (!card.rarity) {
                         const num = parseInt(card.number, 10) || 0;
                         const sub = card.subtype || '';
                         if (sub === 'VMAX') card.rarity = 'Rare Holo VMAX';
                         else if (sub === 'VSTAR') card.rarity = 'Rare Holo VSTAR';
                         else if (sub === 'V' || sub === 'ex' || sub === 'GX') card.rarity = 'Rare Holo ' + sub;
                         else if (num > setTotal && setTotal > 0) {
-                            const range = setTotal * 0.5;
-                            const pos = num - setTotal;
+                            const range = setTotal * 0.5, pos = num - setTotal;
                             if (pos > range * 0.8) card.rarity = 'Hyper Rare';
                             else if (pos > range * 0.6) card.rarity = 'Special Illustration Rare';
                             else if (pos > range * 0.3) card.rarity = 'Illustration Rare';
                             else card.rarity = 'Rare Secret';
-                        }
-                        else card.rarity = 'Rare';
+                        } else card.rarity = 'Rare';
                     }
                 });
-
                 totalCardCount = allCards.length;
                 populateRarityFilter();
                 currentPage = 1;
@@ -427,45 +399,34 @@
             rarities.forEach(r => { sel.innerHTML += `<option value="${r}">${r}</option>`; });
         }
 
-        function getCardImageSrc(card, set) {
-            const a = api;
-            const primary = a.cardImage(card, set);
-            if (!primary) return null;
-            return primary;
-        }
+        function getCardImageSrc(card) { return card.image || null; }
 
-        function getCardFallbackSrc(card, set) {
-            const enSetId = (set?.id || '').toLowerCase();
-            const num = (card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1';
-            return `https://images.pokemontcg.io/${enSetId}/${num}.png`;
+        function getCardFallbackSrc(card) {
+            const setId = (card.set?.id || '').toLowerCase();
+            const num = (card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1';
+            return `https://images.pokemontcg.io/${setId}/${num}.png`;
         }
 
         function renderCards() {
             const c = document.getElementById('cardsContent');
             if (!allCards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            const a = api;
             const start = (currentPage - 1) * perPage;
             const pageCards = allCards.slice(start, start + perPage);
-
             c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
                 const owned = !!collection[card.id];
-                const img = getCardImageSrc(card, currentSet);
-                const fallback = getCardFallbackSrc(card, currentSet);
+                const img = getCardImageSrc(card);
+                const fallback = getCardFallbackSrc(card);
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${img
-                            ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">`
-                            : `<span class="no-img">No image</span>`}
+                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
                         <div class="card-meta">${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
                     </div>
                     <div class="card-actions">
-                        ${owned
-                            ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>`
-                            : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
                     </div>
                 </div>`;
             }).join('')}</div>`;
@@ -484,8 +445,7 @@
             globalSearchTimeout = setTimeout(async () => {
                 document.getElementById('globalCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
                 try {
-                    let all = [];
-                    let page = 1;
+                    let all = [], page = 1;
                     while (true) {
                         const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(q)}*&page=${page}&pageSize=250&orderBy=number`);
                         const d = await res.json();
@@ -493,7 +453,11 @@
                         if (!d.data || d.data.length < 250) break;
                         page++;
                     }
-                    globalSearchCards = all.map(c => api.cardMap(c));
+                    globalSearchCards = all.map(c => ({
+                        id: c.id, name: c.name, number: c.number, rarity: c.rarity,
+                        set: { id: c.set?.id || '', name: c.set?.name || '' },
+                        image: c.images?.small
+                    }));
                     renderGlobalCards(globalSearchCards);
                 } catch (e) {
                     document.getElementById('globalCardsContent').innerHTML = `<div class="error-msg">Error. ${e.message}</div>`;
@@ -504,45 +468,31 @@
         function renderGlobalCards(cards) {
             const c = document.getElementById('globalCardsContent');
             if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            const a = api;
             c.innerHTML = `<div class="cards-grid">${cards.map(card => {
                 const owned = !!collection[card.id];
                 const setName = card.set?.name || card.set?.id || '';
-                const setId = card.set?.id || card._setRawId || '';
+                const setId = card.set?.id || '';
                 return `<div class="card-tcg ${owned ? 'owned' : ''}">
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${card.image
-                            ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/${(card.set?.id || '').toLowerCase()}/${(card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">`
-                            : `<span class="no-img">No image</span>`}
+                        ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/${setId.toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
-                        <div class="card-meta">${setName ? setName + ' ' : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || card.localId || ''}</div>
+                        <div class="card-meta">${setName ? setName + ' ' : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
                     </div>
                     <div class="card-actions">
                         <button class="remove-btn" onclick="goToCard('${card.id}', '${setId}')" style="margin-bottom:4px;">Go to card</button>
-                        ${owned
-                            ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>`
-                            : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
                     </div>
                 </div>`;
             }).join('')}</div>`;
         }
 
         async function goToCard(cardId, setId) {
-            if (!setId) {
-                toast('Set not found for this card');
-                return;
-            }
-            let targetSet = allSets.find(s => s.id === setId);
-            if (!targetSet) {
-                targetSet = allSets.find(s => s.ids && s.ids.includes(setId));
-            }
-            if (!targetSet) {
-                toast('Set not found');
-                return;
-            }
+            if (!setId) { toast('Set not found for this card'); return; }
+            const targetSet = allSets.find(s => s.id === setId);
+            if (!targetSet) { toast('Set not found'); return; }
             await openSet(targetSet.id);
             setTimeout(() => {
                 const el = document.querySelector(`.card-tcg[data-card-id="${cardId}"]`);
@@ -550,28 +500,13 @@
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     el.style.boxShadow = '0 0 0 3px var(--accent), 0 0 30px var(--accent-glow)';
                     setTimeout(() => { el.style.boxShadow = ''; }, 2000);
-                } else {
-                    const nameInput = document.getElementById('cardSearch');
-                    if (nameInput) {
-                        nameInput.value = cardId.split('-').slice(1).join('-');
-                        filterCards();
-                    }
                 }
             }, 500);
         }
 
         function toast(msg) {
-            const t = document.createElement('div');
-            t.className = 'toast';
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 3000);
-        }
-
-        async function fetchCardsPage(page) {
-            const a = api;
-            const cards = await a.cards(currentSet.id, page, perPage);
-            return (cards || []).map(c => a.cardMap(c, currentSet));
+            const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+            document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
         }
 
         function filterCards() {
@@ -582,8 +517,7 @@
                 const m2 = !rarity || c.rarity === rarity;
                 return m1 && m2;
             });
-            totalCardCount = filtered.length;
-            currentPage = 1;
+            totalCardCount = filtered.length; currentPage = 1;
             renderFilteredCards(filtered);
             updateStatsFiltered(filtered);
             updatePageInfo();
@@ -592,29 +526,23 @@
         function renderFilteredCards(cards) {
             const c = document.getElementById('cardsContent');
             if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            const a = api;
             const start = (currentPage - 1) * perPage;
             const pageCards = cards.slice(start, start + perPage);
-
             c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
                 const owned = !!collection[card.id];
-                const img = getCardImageSrc(card, currentSet);
-                const fallback = getCardFallbackSrc(card, currentSet);
+                const img = getCardImageSrc(card);
+                const fallback = getCardFallbackSrc(card);
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${img
-                            ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">`
-                            : `<span class="no-img">No image</span>`}
+                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
                         <div class="card-meta">${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
                     </div>
                     <div class="card-actions">
-                        ${owned
-                            ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>`
-                            : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
                     </div>
                 </div>`;
             }).join('')}</div>`;
@@ -635,13 +563,8 @@
             currentPage = newPage;
             const search = document.getElementById('cardSearch').value.toLowerCase();
             const rarity = document.getElementById('rarityFilter').value;
-            if (search || rarity) {
-                filterCards();
-            } else {
-                renderCards();
-            }
-            updatePageInfo();
-            window.scrollTo(0, 0);
+            if (search || rarity) { filterCards(); } else { renderCards(); }
+            updatePageInfo(); window.scrollTo(0, 0);
         }
 
         function updateStats() {
@@ -653,52 +576,36 @@
         }
 
         function toggleCard(cardId) {
-            if (collection[cardId]) {
-                delete collection[cardId];
-            } else {
+            if (collection[cardId]) { delete collection[cardId]; }
+            else {
                 const brief = allCards.find(c => c.id === cardId) || globalSearchCards.find(c => c.id === cardId);
-                const a = api;
-                collection[cardId] = {
-                    ...brief, quantity: 1, dateAdded: new Date().toISOString()
-                };
+                collection[cardId] = { ...brief, quantity: 1, dateAdded: new Date().toISOString() };
             }
             localStorage.setItem('pokemonCollection', JSON.stringify(collection));
             const search = document.getElementById('cardSearch').value.toLowerCase();
             const rarity = document.getElementById('rarityFilter').value;
-            if (search || rarity) {
-                filterCards();
-            } else {
-                renderCards();
-            }
+            if (search || rarity) { filterCards(); } else { renderCards(); }
             updateStats();
         }
 
         function renderCollection() {
             const c = document.getElementById('collectionContent');
             let cards = Object.values(collection);
-            if (!cards.length) {
-                c.innerHTML = '<div class="empty-state"><h3>Your collection is empty</h3><p>Start by adding cards from the Expansions tab!</p></div>';
-                updateColStats([]); return;
-            }
+            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>Your collection is empty</h3><p>Start by adding cards from the Expansions tab!</p></div>'; updateColStats([]); return; }
             const search = document.getElementById('collectionSearch')?.value.toLowerCase() || '';
             const sort = document.getElementById('collectionSort')?.value || 'dex';
             if (search) cards = cards.filter(x => x.name.toLowerCase().includes(search) || x.set?.name?.toLowerCase().includes(search));
             cards = sortCards(cards, sort);
             updateColStats(cards);
-
             c.innerHTML = `<div class="collection-list">${cards.map(card => {
-                const dex = getDexId(card);
-                const dexStr = dex ? '#' + String(dex).padStart(3, '0') : '???';
+                const dex = card.dexId || 9999;
+                const dexStr = dex < 9999 ? '#' + String(dex).padStart(3, '0') : '???';
                 let img = card.image;
-                if (img && !img.endsWith('.png') && !img.endsWith('.webp') && !img.endsWith('.jpg')) {
-                    img = img + '/high.webp';
-                }
-                const fallbackImg = `https://images.pokemontcg.io/${(card.set?.id || '').toLowerCase()}/${(card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png`;
+                if (img && !img.endsWith('.png') && !img.endsWith('.webp') && !img.endsWith('.jpg')) img = img + '/high.webp';
+                const fallbackImg = `https://images.pokemontcg.io/${(card.set?.id || '').toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png`;
                 return `<div class="collection-item">
                     <div class="collection-dex-num">${dexStr}</div>
-                    ${img
-                        ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.onerror=null; this.src='${fallbackImg}'; this.onerror=function(){this.style.display='none';};">`
-                        : `<img class="collection-thumb" src="${fallbackImg}" alt="${card.name}" onerror="this.style.display='none';">`}
+                    ${img ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.onerror=null; this.src='${fallbackImg}'; this.onerror=function(){this.style.display='none';};">` : `<img class="collection-thumb" src="${fallbackImg}" alt="${card.name}" onerror="this.style.display='none';">`}
                     <div class="collection-info">
                         <h4>${card.name}</h4>
                         <p>${card.set?.name || ''} #${card.number || ''} ${card.rarity || ''}</p>
@@ -715,19 +622,10 @@
 
         function sortCards(cards, by) {
             return [...cards].sort((a, b) => {
-                if (by === 'dex') {
-                    const da = getDexId(a) || 9999, db = getDexId(b) || 9999;
-                    return da !== db ? da - db : (a.number || '').localeCompare(b.number || '');
-                }
-                if (by === 'set-exp') {
-                    if (a.set?.id !== b.set?.id) return (a.set?.id || '').localeCompare(b.set?.id || '');
-                    return parseInt(a.number || 0) - parseInt(b.number || 0);
-                }
+                if (by === 'dex') { const da = a.dexId || 9999, db = b.dexId || 9999; return da !== db ? da - db : (a.number || '').localeCompare(b.number || ''); }
+                if (by === 'set-exp') { if (a.set?.id !== b.set?.id) return (a.set?.id || '').localeCompare(b.set?.id || ''); return parseInt(a.number || 0) - parseInt(b.number || 0); }
                 if (by === 'name') return a.name.localeCompare(b.name);
-                if (by === 'rarity') {
-                    const o = ['Common','Uncommon','Rare','Rare Holo','Rare Holo EX','Rare Ultra','Rare Secret','Rare Shiny','Illustration Rare','Special Illustration Rare','Hyper Rare'];
-                    return (o.indexOf(a.rarity) || 99) - (o.indexOf(b.rarity) || 99);
-                }
+                if (by === 'rarity') { const o = ['Common','Uncommon','Rare','Rare Holo','Rare Holo EX','Rare Ultra','Rare Secret','Rare Shiny','Illustration Rare','Special Illustration Rare','Hyper Rare']; return (o.indexOf(a.rarity) || 99) - (o.indexOf(b.rarity) || 99); }
                 if (by === 'date') return new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0);
                 return 0;
             });
@@ -737,7 +635,7 @@
             document.getElementById('colUnique').textContent = cards.length;
             document.getElementById('colTotal').textContent = cards.reduce((s, c) => s + (c.quantity || 1), 0);
             document.getElementById('colExpansions').textContent = new Set(cards.map(c => c.set?.id)).size;
-            document.getElementById('colSpecies').textContent = new Set(cards.map(c => getDexId(c)).filter(Boolean)).size;
+            document.getElementById('colSpecies').textContent = new Set(cards.map(c => c.dexId).filter(Boolean)).size;
         }
 
         function changeQty(id, d) {
@@ -745,6 +643,54 @@
         }
 
         function removeCard(id) { delete collection[id]; localStorage.setItem('pokemonCollection', JSON.stringify(collection)); renderCollection(); }
+
+        function showView(view) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(`view-${view}`).classList.add('active');
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            if (view === 'expansions') {
+                document.getElementById('btn-expansions').classList.add('active');
+                document.getElementById('expansionsTitle').textContent = 'All Expansions';
+            } else if (view === 'collection') {
+                document.getElementById('btn-collection').classList.add('active');
+                renderCollection();
+            }
+        }
+
+        function setMode(mode) {
+            document.getElementById('sets-mode').style.display = mode === 'sets' ? '' : 'none';
+            document.getElementById('cards-mode').style.display = mode === 'cards' ? '' : 'none';
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-mode-${mode}`).classList.add('active');
+        }
+
+        async function loadDex() {
+            try {
+                const r = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1025');
+                const d = await r.json();
+                d.results.forEach((p, i) => { pokemonDexCache[p.name] = i + 1; });
+            } catch (e) {}
+        }
+
+        function getDexId(card) {
+            if (card.dexId) return card.dexId;
+            const name = card.name?.toLowerCase().replace(/[^a-z]/g, '');
+            if (pokemonDexCache[name]) return pokemonDexCache[name];
+            const reversed = Object.entries(pokemonDexCache).find(([k]) => k.includes(name));
+            return reversed ? reversed[1] : null;
+        }
+
+        let allSets = [];
+        let currentSet = null;
+        let allCards = [];
+        let totalCardCount = 0;
+        let currentPage = 1;
+        const perPage = 100;
+        let collection = JSON.parse(localStorage.getItem('pokemonCollection') || '{}');
+        let pokemonDexCache = {};
+        let currentMode = 'sets';
+
+        document.addEventListener('DOMContentLoaded', () => { loadSets(); loadDex(); });
     </script>
 </body>
 </html>
