@@ -288,7 +288,7 @@
                 setSymbol: (s) => s.images?.symbol,
                 cardImage: (c) => c.image,
                 cardImageLarge: (c) => c.imageLarge,
-                setMap: (s) => ({ id: s.id, name: s.name, total: s.total, series: s.series, releaseDate: s.releaseDate, images: s.images }),
+                setMap: (s) => ({ id: s.id, name: s.name, total: s.total, series: s.series, releaseDate: s.releaseDate, logo: s.images?.logo, symbol: s.images?.symbol }),
                 cardMap: (c) => ({
                     id: c.id, name: c.name, number: c.number, rarity: c.rarity,
                     set: { id: c.set.id, name: c.set.name },
