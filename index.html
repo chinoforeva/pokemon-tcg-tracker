@@ -507,7 +507,8 @@
         }
 
         function getEnSetId(setId) {
-            return KR_EN_SET_MAP[setId] || JP_EN_SET_MAP[setId] || setId;
+            const first = setId.split(',')[0];
+            return KR_EN_SET_MAP[first] || JP_EN_SET_MAP[first] || first;
         }
 
         let currentLang = localStorage.getItem('tcgLang') || 'en';
@@ -595,6 +596,25 @@
                 const a = api();
                 const data = await a.sets();
                 allSets = data.map(s => a.setMap(s));
+                if (currentLang === 'ja' || currentLang === 'ko') {
+                    const setMap = currentLang === 'ja' ? JP_EN_SET_MAP : KR_EN_SET_MAP;
+                    const grouped = {};
+                    allSets.forEach(s => {
+                        const enId = (setMap[s.id] || s.id).toLowerCase();
+                        if (!grouped[enId]) {
+                            grouped[enId] = { id: s.id, name: s.name, total: s.total || 0, series: s.series, logo: s.logo, ids: [s.id] };
+                        } else {
+                            if (!grouped[enId].ids.includes(s.id)) {
+                                grouped[enId].ids.push(s.id);
+                                grouped[enId].id += ',' + s.id;
+                                grouped[enId].total = (grouped[enId].total || 0) + (s.total || 0);
+                                if (!grouped[enId].name.includes(s.name)) grouped[enId].name += ' / ' + s.name;
+                            }
+                            if (!grouped[enId].logo) grouped[enId].logo = s.logo;
+                        }
+                    });
+                    allSets = Object.values(grouped).sort((a, b) => (b.total || 0) - (a.total || 0));
+                }
                 populateSeriesFilter();
                 renderExpansions(allSets);
             } catch (e) {
@@ -661,10 +681,18 @@
 
             const a = api();
             try {
-                const res = await a.cards(setId, 1, perPage);
-                const cards = res.data || res;
-                allCards = (cards || []).map(c => a.cardMap(c, setObj));
-                totalCardCount = res.totalCount || allCards.length;
+                let allRawCards = [];
+                if ((currentLang === 'ja' || currentLang === 'ko') && setObj.ids) {
+                    for (const sid of setObj.ids) {
+                        const res = await a.cards(sid, 1, perPage);
+                        allRawCards = allRawCards.concat(res || []);
+                    }
+                } else {
+                    const res = await a.cards(setId, 1, perPage);
+                    allRawCards = res.data || res;
+                }
+                allCards = (allRawCards || []).map(c => a.cardMap(c, setObj));
+                totalCardCount = allCards.length;
 
                 populateRarityFilter();
                 renderCards();
