@@ -253,12 +253,9 @@
                 <div class="search-box">
                     <input type="text" id="collectionSearch" placeholder="Search collection..." oninput="renderCollection()">
                 </div>
-                <select class="filter-select" id="collectionLangFilter" onchange="renderCollection()">
-                    <option value="">All Languages</option>
-                    <option value="en">English</option>
-                    <option value="ja">Japanese</option>
-                    <option value="ko">Korean</option>
-                </select>
+            <select class="filter-select" id="collectionLangFilter" onchange="renderCollection()">
+                <option value="">All Languages</option>
+            </select>
             </div>
             <div class="collection-sort">
                 Sort by:
@@ -438,9 +435,9 @@
         }
 
         function getCardFallbackSrc(card, set) {
-            const enSetId = getEnSetId(set?.id || '').toLowerCase();
+            const enSetId = (set?.id || '').toLowerCase();
             const num = (card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1';
-            return `https://images.pokemontcg.io/en/${enSetId}/${num}.png`;
+            return `https://images.pokemontcg.io/${enSetId}/${num}.png`;
         }
 
         function renderCards() {
@@ -516,7 +513,7 @@
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${card.image
-                            ? `<img src="${card.image + (a.hasBuiltInImages ? '' : '/high.webp')}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/en/${(getEnSetId(card.set?.id || '')).toLowerCase()}/${(card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">`
+                            ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/${(card.set?.id || '').toLowerCase()}/${(card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">`
                             : `<span class="no-img">No image</span>`}
                     </div>
                     <div class="card-details">
@@ -659,26 +656,21 @@
             if (collection[cardId]) {
                 delete collection[cardId];
             } else {
-                const sourceCards = currentMode === 'cards' ? globalSearchCards : allCards;
-                const brief = sourceCards.find(c => c.id === cardId);
+                const brief = allCards.find(c => c.id === cardId) || globalSearchCards.find(c => c.id === cardId);
                 const a = api;
                 collection[cardId] = {
                     ...brief, quantity: 1, dateAdded: new Date().toISOString()
                 };
             }
             localStorage.setItem('pokemonCollection', JSON.stringify(collection));
-            if (currentMode === 'cards') {
-                renderGlobalCards(globalSearchCards);
+            const search = document.getElementById('cardSearch').value.toLowerCase();
+            const rarity = document.getElementById('rarityFilter').value;
+            if (search || rarity) {
+                filterCards();
             } else {
-                const search = document.getElementById('cardSearch').value.toLowerCase();
-                const rarity = document.getElementById('rarityFilter').value;
-                if (search || rarity) {
-                    filterCards();
-                } else {
-                    renderCards();
-                }
-                updateStats();
+                renderCards();
             }
+            updateStats();
         }
 
         function renderCollection() {
@@ -689,31 +681,26 @@
                 updateColStats([]); return;
             }
             const search = document.getElementById('collectionSearch')?.value.toLowerCase() || '';
-            const langF = document.getElementById('collectionLangFilter')?.value || '';
             const sort = document.getElementById('collectionSort')?.value || 'dex';
             if (search) cards = cards.filter(x => x.name.toLowerCase().includes(search) || x.set?.name?.toLowerCase().includes(search));
-            if (langF) cards = cards.filter(x => x.lang === langF);
             cards = sortCards(cards, sort);
             updateColStats(cards);
 
             c.innerHTML = `<div class="collection-list">${cards.map(card => {
                 const dex = getDexId(card);
                 const dexStr = dex ? '#' + String(dex).padStart(3, '0') : '???';
-                const langLabel = card.lang ? `[${langNames[card.lang] || card.lang}]` : '';
                 let img = card.image;
                 if (img && !img.endsWith('.png') && !img.endsWith('.webp') && !img.endsWith('.jpg')) {
                     img = img + '/high.webp';
                 }
-                const fallbackImg = card.lang !== 'en' ? `https://images.pokemontcg.io/en/${(getEnSetId(card.set?.id || '')).toLowerCase()}/${(card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png` : '';
+                const fallbackImg = `https://images.pokemontcg.io/${(card.set?.id || '').toLowerCase()}/${(card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png`;
                 return `<div class="collection-item">
                     <div class="collection-dex-num">${dexStr}</div>
                     ${img
                         ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.onerror=null; this.src='${fallbackImg}'; this.onerror=function(){this.style.display='none';};">`
-                        : fallbackImg
-                        ? `<img class="collection-thumb" src="${fallbackImg}" alt="${card.name}" onerror="this.style.display='none';">`
-                        : `<div class="collection-thumb" style="display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--text-muted);">No img</div>`}
+                        : `<img class="collection-thumb" src="${fallbackImg}" alt="${card.name}" onerror="this.style.display='none';">`}
                     <div class="collection-info">
-                        <h4>${card.name} ${langLabel}</h4>
+                        <h4>${card.name}</h4>
                         <p>${card.set?.name || ''} #${card.number || ''} ${card.rarity || ''}</p>
                     </div>
                     <div class="collection-qty">
