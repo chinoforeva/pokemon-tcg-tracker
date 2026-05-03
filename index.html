@@ -760,6 +760,28 @@
                 }
                 allCards = (allRawCards || []).map(c => a.cardMap(c, setObj));
 
+                if (currentLang === 'en') {
+                    const setTotal = currentSet?.total || 0;
+                    allCards.forEach(card => {
+                        if (!card.rarity || card.rarity === '') {
+                            const num = parseInt(card.number, 10) || 0;
+                            const sub = card.subtype || '';
+                            if (sub === 'VMAX') card.rarity = 'Rare Holo VMAX';
+                            else if (sub === 'VSTAR') card.rarity = 'Rare Holo VSTAR';
+                            else if (sub === 'V' || sub === 'ex' || sub === 'GX') card.rarity = 'Rare Holo ' + sub;
+                            else if (num > setTotal && setTotal > 0) {
+                                const range = setTotal * 0.5;
+                                const pos = num - setTotal;
+                                if (pos > range * 0.8) card.rarity = 'Hyper Rare';
+                                else if (pos > range * 0.6) card.rarity = 'Special Illustration Rare';
+                                else if (pos > range * 0.3) card.rarity = 'Illustration Rare';
+                                else card.rarity = 'Rare Secret';
+                            }
+                            else card.rarity = 'Rare';
+                        }
+                    });
+                }
+
                 if (currentLang === 'ja') {
                     const batchSize = 20;
                     const numCards = allCards.length;
