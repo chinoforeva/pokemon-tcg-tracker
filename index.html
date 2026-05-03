@@ -62,6 +62,10 @@
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .mode-toggle { display: flex; gap: 0.25rem; background: var(--glass); padding: 0.3rem; border-radius: 10px; border: 1px solid var(--border); }
+        .mode-btn { padding: 0.5rem 1rem; background: transparent; border: none; border-radius: 8px; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        .mode-btn:hover { color: var(--text-primary); }
+        .mode-btn.active { background: var(--accent); color: white; }
         .section-title { font-size: 1.6rem; font-weight: 700; }
         .controls { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
         .search-box { flex: 1; min-width: 200px; position: relative; }
@@ -190,16 +194,30 @@
         <div id="view-expansions" class="view active">
             <div class="section-header">
                 <h2 class="section-title" id="expansionsTitle">All Expansions</h2>
-            </div>
-            <div class="controls">
-                <div class="search-box">
-                    <input type="text" id="expansionSearch" placeholder="Search expansions..." oninput="filterExpansions()">
+                <div class="mode-toggle">
+                    <button class="mode-btn active" id="btn-mode-sets" onclick="setMode('sets')">Sets</button>
+                    <button class="mode-btn" id="btn-mode-cards" onclick="setMode('cards')">Cards</button>
                 </div>
-                <select class="filter-select" id="seriesFilter" onchange="filterExpansions()">
-                    <option value="">All Series</option>
-                </select>
             </div>
-            <div id="expansionsContent"></div>
+            <div id="sets-mode">
+                <div class="controls">
+                    <div class="search-box">
+                        <input type="text" id="expansionSearch" placeholder="Search expansions..." oninput="filterExpansions()">
+                    </div>
+                    <select class="filter-select" id="seriesFilter" onchange="filterExpansions()">
+                        <option value="">All Series</option>
+                    </select>
+                </div>
+                <div id="expansionsContent"></div>
+            </div>
+            <div id="cards-mode" style="display:none;">
+                <div class="controls">
+                    <div class="search-box">
+                        <input type="text" id="globalCardSearch" placeholder="Search cards by name..." oninput="searchGlobalCards()">
+                    </div>
+                </div>
+                <div id="globalCardsContent"></div>
+            </div>
         </div>
 
         <div id="view-cards" class="view">
@@ -562,6 +580,21 @@
 
         function api() { return APIS[currentLang]; }
 
+        let currentMode = 'sets';
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('btn-mode-sets').classList.toggle('active', mode === 'sets');
+            document.getElementById('btn-mode-cards').classList.toggle('active', mode === 'cards');
+            document.getElementById('sets-mode').style.display = mode === 'sets' ? '' : 'none';
+            document.getElementById('cards-mode').style.display = mode === 'cards' ? '' : 'none';
+            if (mode === 'sets') {
+                if (!allSets.length) loadSets();
+            } else {
+                document.getElementById('globalCardsContent').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Type a card name to search</p>';
+            }
+        }
+
         function showView(view) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById('btn-expansions').classList.remove('active');
@@ -769,6 +802,71 @@
             }).join('')}</div>`;
         }
 
+        let globalSearchTimeout = null;
+        let globalSearchCards = [];
+
+        function searchGlobalCards() {
+            clearTimeout(globalSearchTimeout);
+            const q = document.getElementById('globalCardSearch').value.trim();
+            if (!q) {
+                document.getElementById('globalCardsContent').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Type a card name to search</p>';
+                return;
+            }
+            globalSearchTimeout = setTimeout(async () => {
+                document.getElementById('globalCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
+                try {
+                    let cards;
+                    if (currentLang === 'en') {
+                        let all = [];
+                        let page = 1;
+                        while (true) {
+                            const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(q)}*&page=${page}&pageSize=250&orderBy=number`);
+                            const d = await res.json();
+                            all = all.concat(d.data || []);
+                            if (!d.data || d.data.length < 250) break;
+                            page++;
+                        }
+                        cards = all.map(c => APIS.en.cardMap(c));
+                    } else {
+                        const setMap = currentLang === 'ja' ? JP_EN_SET_MAP : KR_EN_SET_MAP;
+                        cards = await fetchJSON(`https://api.tcgdex.net/v2/${currentLang === 'ja' ? 'ja' : 'en'}/cards?name=${encodeURIComponent(q)}&pagination:itemsPerPage=250`);
+                        cards = (cards || []).map(c => APIS[currentLang].cardMap(c, { id: c.set?.id || '', name: c.set?.name || '' }));
+                    }
+                    globalSearchCards = cards || [];
+                    renderGlobalCards(globalSearchCards);
+                } catch (e) {
+                    document.getElementById('globalCardsContent').innerHTML = `<div class="error-msg">Error. ${e.message}</div>`;
+                }
+            }, 400);
+        }
+
+        function renderGlobalCards(cards) {
+            const c = document.getElementById('globalCardsContent');
+            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
+            const a = api();
+            c.innerHTML = `<div class="cards-grid">${cards.map(card => {
+                const owned = !!collection[card.id];
+                const setName = card.set?.name || card.set?.id || '';
+                return `<div class="card-tcg ${owned ? 'owned' : ''}">
+                    <div class="owned-badge"></div>
+                    <div class="card-img-wrap">
+                        ${card.image
+                            ? `<img src="${card.image + (a.hasBuiltInImages ? '' : '/high.webp')}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/en/${(getEnSetId(card.set?.id || '')).toLowerCase()}/${(card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">`
+                            : `<span class="no-img">No image</span>`}
+                    </div>
+                    <div class="card-details">
+                        <div class="card-name">${card.name}</div>
+                        <div class="card-meta">${setName ? setName + ' ' : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || card.localId || ''}</div>
+                    </div>
+                    <div class="card-actions">
+                        ${owned
+                            ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>`
+                            : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                    </div>
+                </div>`;
+            }).join('')}</div>`;
+        }
+
         async function fetchCardsPage(page) {
             const a = api();
             const cards = await a.cards(currentSet.id, page, perPage);
@@ -854,21 +952,26 @@
             if (collection[cardId]) {
                 delete collection[cardId];
             } else {
-                const brief = allCards.find(c => c.id === cardId);
+                const sourceCards = currentMode === 'cards' ? globalSearchCards : allCards;
+                const brief = sourceCards.find(c => c.id === cardId);
                 const a = api();
                 collection[cardId] = {
                     ...brief, quantity: 1, dateAdded: new Date().toISOString(), lang: currentLang
                 };
             }
             localStorage.setItem('pokemonCollection', JSON.stringify(collection));
-            const search = document.getElementById('cardSearch').value.toLowerCase();
-            const rarity = document.getElementById('rarityFilter').value;
-            if (search || rarity) {
-                filterCards();
+            if (currentMode === 'cards') {
+                renderGlobalCards(globalSearchCards);
             } else {
-                renderCards();
+                const search = document.getElementById('cardSearch').value.toLowerCase();
+                const rarity = document.getElementById('rarityFilter').value;
+                if (search || rarity) {
+                    filterCards();
+                } else {
+                    renderCards();
+                }
+                updateStats();
             }
-            updateStats();
         }
 
         function renderCollection() {
