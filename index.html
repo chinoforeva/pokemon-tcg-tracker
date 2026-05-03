@@ -293,11 +293,14 @@
                     let allData = [];
                     let p = 1;
                     const batchSize = 250;
-                    while (true) {
-                        const res = await fetchJSON(`https://api.pokemontcg.io/v2/cards?q=set.id:${setId}&page=${p}&pageSize=${batchSize}&orderBy=number`);
-                        const cards = res.data || res || [];
+                    let totalCount = Infinity;
+                    while (allData.length < totalCount) {
+                        const raw = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${setId}&page=${p}&pageSize=${batchSize}&orderBy=number`);
+                        if (!raw.ok) throw new Error(`HTTP ${raw.status}`);
+                        const d = await raw.json();
+                        const cards = d.data || [];
+                        totalCount = d.totalCount || cards.length;
                         allData = allData.concat(cards);
-                        if (cards.length < batchSize) break;
                         p++;
                     }
                     return { data: allData, totalCount: allData.length };
