@@ -50,13 +50,7 @@
         }
         .nav-btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
         .nav-btn.active { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 4px 12px var(--accent-glow); }
-        .lang-selector { display: flex; gap: 0.25rem; background: var(--glass); padding: 0.3rem; border-radius: 10px; border: 1px solid var(--border); }
-        .lang-btn {
-            padding: 0.4rem 0.7rem; background: transparent; border: none; border-radius: 8px;
-            color: var(--text-muted); font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; font-family: inherit;
-        }
-        .lang-btn:hover { color: var(--text-primary); }
-        .lang-btn.active { background: var(--bg-card); color: var(--text-primary); }
+
         main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
         .view { display: none; animation: fadeIn 0.3s ease; }
         .view.active { display: block; }
@@ -182,11 +176,7 @@
                 <button class="nav-btn" id="btn-expansions" onclick="showView('expansions')">Expansions</button>
                 <button class="nav-btn" id="btn-collection" onclick="showView('collection')">My Collection</button>
             </nav>
-            <div class="lang-selector">
-                <button class="lang-btn active" onclick="switchLang('en')">EN</button>
-                <button class="lang-btn" onclick="switchLang('ja')">JP</button>
-                <button class="lang-btn" onclick="switchLang('ko')">KR</button>
-            </div>
+
         </div>
     </header>
 
@@ -319,232 +309,15 @@
                 }),
                 mapCardId: (tcgSetId, num) => null,
                 hasBuiltInImages: true
-            },
-            ja: {
-                name: 'Japanese',
-                sets: () => fetchJSON(`https://api.tcgdex.net/v2/ja/sets?pagination:itemsPerPage=500`),
-                cards: (setId, page, ps) => fetchJSON(`https://api.tcgdex.net/v2/ja/cards?set=${setId}&pagination:itemsPerPage=500`),
-                setLogo: (s) => {
-                    if (s.logo) return s.logo + '.png';
-                    const enId = JP_EN_SET_MAP[s.id] || s.id;
-                    return `https://images.pokemontcg.io/${enId}/logo.png`;
-                },
-                setSymbol: (s) => {
-                    if (s.symbol) return s.symbol + '.png';
-                    const enId = JP_EN_SET_MAP[s.id] || s.id;
-                    return `https://images.pokemontcg.io/${enId}/symbol.png`;
-                },
-                cardImage: (c, set) => {
-                    if (c.image) return c.image + '/high.webp';
-                    const serie = getTcgdexSeries(c.set?.id || set?.id || '');
-                    const setId = c.set?.id || set?.id || '';
-                    const num = c.localId || c.id.split('-').pop();
-                    return `https://assets.tcgdex.net/ja/${serie}/${setId}/${num}/high.webp`;
-                },
-                cardImageLarge: (c) => c.image ? c.image + '/high.webp' : null,
-                setMap: (s) => ({
-                    id: s.id, name: s.name, total: s.cardCount?.total,
-                    series: s.serie?.name || getJpSeriesName(s.id),
-                    releaseDate: s.releaseDate,
-                    logo: s.logo ? s.logo + '.png' : `https://images.pokemontcg.io/${JP_EN_SET_MAP[s.id] || s.id}/logo.png`
-                }),
-                cardMap: (c, set) => {
-                    const sid = c._setRawId || c.set?.id || set?.id || '';
-                    return {
-                        id: c.id, name: c.name, number: c.localId, rarity: c.rarity || '',
-                        set: c.set ? { id: c.set.id, name: c.set.name } : set ? { id: sid, name: set.name } : null,
-                        hp: c.hp || null, types: c.types || [], dexId: c.dexId?.[0] || null,
-                        image: c.image, stage: c.stage || '', subtype: c.subtype || ''
-                    };
-                },
-                mapCardId: (tcgSetId, num) => null,
-                hasBuiltInImages: false
-            },
-            ko: {
-                name: 'Korean',
-                sets: () => fetchJSON(`https://api.tcgdex.net/v2/ko/sets?pagination:itemsPerPage=500`),
-                cards: async (setId, page, ps) => {
-                    const enId = KR_EN_SET_MAP[setId] || setId;
-                    let allData = [];
-                    let p = 1;
-                    const batchSize = 250;
-                    while (true) {
-                        const res = await fetchJSON(`https://api.pokemontcg.io/v2/cards?q=set.id:${enId}&page=${p}&pageSize=${batchSize}&orderBy=number`);
-                        const cards = res.data || res || [];
-                        allData = allData.concat(cards);
-                        if (cards.length < batchSize) break;
-                        p++;
-                    }
-                    return { data: allData, totalCount: allData.length };
-                },
-                setLogo: (s) => {
-                    const enId = KR_EN_SET_MAP[s.id] || s.id;
-                    return `https://images.pokemontcg.io/${enId}/logo.png`;
-                },
-                setSymbol: (s) => {
-                    const enId = KR_EN_SET_MAP[s.id] || s.id;
-                    return `https://images.pokemontcg.io/${enId}/symbol.png`;
-                },
-                cardImage: (c) => c.images?.small || c.image,
-                cardImageLarge: (c) => c.images?.large || c.image,
-                setMap: (s) => {
-                    const enId = KR_EN_SET_MAP[s.id] || s.id;
-                    return { id: s.id, name: s.name, total: s.cardCount?.total, series: getKrSeries(s.id),
-                        logo: `https://images.pokemontcg.io/${enId}/logo.png` };
-                },
-                cardMap: (c, set) => {
-                    const sid = c._setRawId || c.set?.id || set?.id || '';
-                    return {
-                        id: c.id, name: c.name, number: c.number || c.localId, rarity: c.rarity || '',
-                        set: c.set ? { id: c.set.id, name: c.set.name } : set ? { id: sid, name: set.name } : { id: sid, name: '' },
-                        hp: c.hp || null, types: c.types || [], dexId: c.nationalPokedexNumbers?.[0] || c.dexId?.[0] || null,
-                        image: c.images?.small || c.image, stage: c.stage || '', subtype: c.subtypes?.[0] || c.subtype || ''
-                    };
-                },
-                mapCardId: (tcgSetId, num) => null,
-                hasBuiltInImages: false
             }
         };
 
-        const JP_EN_SET_MAP = {
-            'PMCG1': 'base1', 'PMCG2': 'base2', 'PMCG3': 'base3', 'PMCG4': 'base5',
-            'PMCG5': 'gym1', 'PMCG6': 'gym2', 'neo1': 'neo1', 'neo2': 'neo2',
-            'neo3': 'neo3', 'neo4': 'neo4', 'ex1': 'ex1', 'ex2': 'ex2',
-            'ex3': 'ex3', 'ex4': 'ex4', 'ex5': 'ex5', 'ex6': 'ex6',
-            'sm1': 'sm1', 'sm1a': 'sm1', 'sm2': 'sm2', 'sm3': 'sm3', 'sm3a': 'sm3',
-            'sm4': 'sm4', 'sm4a': 'sm4', 'sm5': 'sm5', 'sm5a': 'sm5',
-            'sm6': 'sm6', 'sm7': 'sm7', 'sm7a': 'sm7', 'sm8': 'sm8', 'sm8a': 'sm8',
-            'sm9': 'sm9', 'sm10': 'sm10', 'sm11': 'sm11', 'sm12': 'sm12',
-            'xy1': 'xy1', 'xy2': 'xy2', 'xy3': 'xy3', 'xy4': 'xy4',
-            'xy5': 'xy5', 'xy6': 'xy6', 'xy7': 'xy7', 'xy8': 'xy8',
-            'xy9': 'xy9', 'xy10': 'xy10', 'xy11': 'xy11', 'xy12': 'xy12',
-            'SWSH1': 'swsh1', 'SWSH1a': 'swsh1', 'SWSH2': 'swsh2', 'SWSH3': 'swsh3',
-            'SWSH3a': 'swsh3', 'SWSH4': 'swsh4', 'SWSH4a': 'swsh4',
-            'SWSH5': 'swsh5', 'SWSH5a': 'swsh5', 'SWSH6': 'swsh6', 'SWSH6a': 'swsh6',
-            'SWSH7': 'swsh7', 'SWSH7a': 'swsh7', 'SWSH8': 'swsh8', 'SWSH8a': 'swsh8',
-            'SWSH9': 'swsh9', 'SWSH9a': 'swsh9', 'SWSH10': 'swsh10', 'SWSH10a': 'swsh10',
-            'SWSH11': 'swsh11', 'SWSH11a': 'swsh11', 'SWSH12': 'swsh12', 'SWSH12a': 'swsh12',
-            'SV1': 'sv1', 'SV1a': 'sv1', 'SV1S': 'sv1', 'SV1V': 'sv1',
-            'SV2': 'sv2', 'SV2a': 'sv2', 'SV2D': 'sv2', 'SV2P': 'sv2',
-            'SV3': 'sv3', 'SV3a': 'sv3', 'SV3b': 'sv3',
-            'SV4': 'sv4', 'SV4a': 'sv4', 'SV4K': 'sv4', 'SV4M': 'sv4',
-            'SV5': 'sv5', 'SV5a': 'sv5', 'SV5K': 'sv5', 'SV5M': 'sv5',
-            'SV6': 'sv6', 'SV6a': 'sv6', 'SV6b': 'sv6',
-            'SV7': 'sv7', 'SV7a': 'sv7', 'SV7b': 'sv7',
-            'SV8': 'sv8', 'SV8a': 'sv8',
-            'SV9': 'sv9', 'SV9a': 'sv9',
-            'SV10': 'sv10', 'SV10a': 'sv10',
-            'SV11': 'sv11', 'SV11a': 'sv11',
-            'SVLS': 'sv6', 'SVLN': 'sv6', 'SVK': 'sv4',
-            'M1S': 'sv1', 'M3': 'sv3', 'M11': 'sv11',
-            'S1H': 'swsh1', 'S1W': 'swsh1', 'S1a': 'swsh1',
-            'S2': 'swsh2', 'S3': 'swsh3', 'S3a': 'swsh3',
-            'S4': 'swsh4', 'S4a': 'swsh4',
-            'S5I': 'swsh5', 'S5R': 'swsh5', 'S5a': 'swsh5',
-            'S6H': 'swsh6', 'S6K': 'swsh6', 'S6a': 'swsh6',
-            'S7D': 'swsh7', 'S7R': 'swsh7',
-            'S8': 'swsh8', 'S8a': 'swsh8', 'S8b': 'swsh8',
-            'S9': 'swsh9', 'S9a': 'swsh9',
-            'S10D': 'swsh10', 'S10a': 'swsh10', 'S10b': 'swsh10', 'S10P': 'swsh10',
-            'S11': 'swsh11', 'S11a': 'swsh11',
-            'S12': 'swsh12', 'S12a': 'swsh12',
-        };
-
-        const EN_SUB_SET_MAP = {
-            'swsh9tg': 'swsh9', 'swsh10tg': 'swsh10', 'swsh11tg': 'swsh11', 'swsh12tg': 'swsh12',
-            'swsh12pt5gg': 'swsh12pt5', 'swsh45sv': 'swsh45', 'sma': 'sm115',
-            'cel25c': 'cel25',
-        };
-
-        const KR_EN_SET_MAP = {
-            'SM1M': 'sm1', 'SM1S': 'sm1', 'SM1+': 'sm1',
-            'SM2K': 'sm2', 'SM2L': 'sm2', 'sm2+': 'sm2',
-            'SM3H': 'sm3', 'SM3N': 'sm3', 'SM3+': 'sm3',
-            'SM4A': 'sm4', 'SM4S': 'sm4', 'SM4+': 'sm4',
-            'SM5S': 'sm5', 'SM5M': 'sm5', 'SM5+': 'sm5',
-            'SM6': 'sm6', 'SM6a': 'sm6', 'SM6b': 'sm6',
-            'SM7': 'sm7', 'SM7a': 'sm7', 'SM7b': 'sm7',
-            'SM8': 'sm8', 'SM8a': 'sm8', 'SM8b': 'sm8',
-            'SM9': 'sm9', 'SM9a': 'sm9', 'SM9b': 'sm9',
-            'SM10': 'sm10', 'sn10a': 'sm10', 'SM10b': 'sm10',
-            'sn11': 'sm11', 'SM11a': 'sm11', 'SM11b': 'sm11',
-            'SM12': 'sm12', 'SM12a': 'sm12',
-            'S1H': 'swsh1', 'S1W': 'swsh1', 'S1a': 'swsh1',
-            'S2': 'swsh2', 'S3': 'swsh3', 'S3a': 'swsh3',
-            'S4': 'swsh4', 'S4a': 'swsh4',
-            'S5I': 'swsh5', 'S5R': 'swsh5', 'S5a': 'swsh5',
-            'S6H': 'swsh6', 'S6K': 'swsh6', 'S6a': 'swsh6',
-            'S7D': 'swsh7', 'S7R': 'swsh7',
-            'S8': 'swsh8', 'S8a': 'swsh8', 'S8b': 'swsh8',
-            'S9': 'swsh9', 'S9a': 'swsh9',
-            'S10D': 'swsh10', 'S10a': 'swsh10', 'S10b': 'swsh10', 'S10P': 'swsh10',
-            'S11': 'swsh11', 'S11a': 'swsh11',
-            'S12': 'swsh12', 'S12a': 'swsh12',
-            'sv1a': 'sv1', 'SV1a': 'sv1', 'SV1S': 'sv1', 'SV1V': 'sv1',
-            'sv2a': 'sv2', 'SV2a': 'sv2', 'SV2D': 'sv2', 'SV2P': 'sv2',
-            'SV3': 'sv3', 'SV3a': 'sv3',
-            'SV4a': 'sv4', 'SV4K': 'sv4', 'SV4M': 'sv4',
-            'SV5a': 'sv5', 'SV5K': 'sv5', 'SV5M': 'sv5',
-            'SV6': 'sv6', 'SV6a': 'sv6',
-            'SV7': 'sv7', 'SV7a': 'sv7',
-            'SV8': 'sv8', 'SV8a': 'sv8',
-            'SV9': 'sv9', 'SV9a': 'sv9',
-            'SV10': 'sv10',
-            'SV11B': 'sv11', 'SV11W': 'sv11',
-            'SVLS': 'sv6', 'SVLN': 'sv6', 'SVK': 'sv4',
-            'M1S': 'sv1', 'M3': 'sv3',
-            'CS1a': 'sv1', 'CS1b': 'sv1', 'CS1.5': 'sv1',
-            'CS2a': 'sv2', 'CS2b': 'sv2', 'CS2.5': 'sv2', 'CS3.5': 'sv3',
-            'SMP2': 'smp', 'S10P': 'smp',
-            'XY1a': 'xy1', 'XY1b': 'xy1', 'XY2': 'xy2', 'XY3': 'xy3',
-            'XY4': 'xy4', 'XY5a': 'xy5', 'XY6': 'xy6', 'XY7': 'xy7',
-            'XY8a': 'xy8', 'XY8b': 'xy8', 'XY9': 'xy9',
-            'XY10': 'xy10', 'XY11a': 'xy11',
-            'CP1': 'xy2', 'CP2': 'xy7', 'CP3': 'xy9', 'CP4': 'xy11', 'CP5': 'xy11', 'CP6': 'xy12',
-        };
-
-        function getTcgdexSeries(setId) {
-            const s = setId.toUpperCase();
-            if (s.startsWith('SV') || s.startsWith('M')) return 'SV';
-            if (s.startsWith('S') || s.startsWith('SM')) return 'SWSH';
-            if (s.startsWith('XY') || s.startsWith('CP')) return 'XY';
-            if (s.startsWith('ADV') || s.startsWith('PCG')) return 'ADV';
-            if (s.startsWith('E') || s.startsWith('VS')) return 'E';
-            if (s.startsWith('NEO')) return 'neo';
-            if (s.startsWith('PMCG')) return 'base';
-            if (s.startsWith('L')) return 'L';
-            return setId.substring(0, 2);
+        async function fetchJSON(url) {
+            const r = await fetch(url);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
         }
 
-        function getJpSeriesName(setId) {
-            const s = setId.toUpperCase();
-            if (s.startsWith('SV') || s.startsWith('M')) return 'Scarlet & Violet';
-            if (s.startsWith('S')) return 'Sword & Shield';
-            if (s.startsWith('SM')) return 'Sun & Moon';
-            if (s.startsWith('XY') || s.startsWith('CP')) return 'XY';
-            if (s.startsWith('ADV') || s.startsWith('PCG')) return 'ADV';
-            if (s.startsWith('E') || s.startsWith('VS')) return 'EX';
-            if (s.startsWith('NEO')) return 'Neo';
-            if (s.startsWith('PMCG')) return 'Base';
-            if (s.startsWith('L')) return 'LP';
-            return setId.substring(0, 2).toUpperCase();
-        }
-
-        function getKrSeries(setId) {
-            const s = setId.toUpperCase();
-            if (s.startsWith('SV') || s.startsWith('CS') || s.startsWith('M')) return 'Scarlet & Violet';
-            if (s.startsWith('S')) return 'Sword & Shield';
-            if (s.startsWith('XY') || s.startsWith('CP')) return 'XY';
-            if (s.startsWith('SM')) return 'Sun & Moon';
-            return setId.substring(0, 2).toUpperCase();
-        }
-
-        function getEnSetId(setId) {
-            const first = setId.split(',')[0];
-            return KR_EN_SET_MAP[first] || JP_EN_SET_MAP[first] || first;
-        }
-
-        let currentLang = localStorage.getItem('tcgLang') || 'en';
         let allSets = [];
         let currentSet = null;
         let allCards = [];
@@ -554,160 +327,19 @@
         let collection = JSON.parse(localStorage.getItem('pokemonCollection') || '{}');
         let pokemonDexCache = {};
 
-        const langNames = { en: 'English', ja: 'Japanese', ko: 'Korean' };
+        const api = APIS.en;
 
         document.addEventListener('DOMContentLoaded', () => {
-            setLangBtns(currentLang);
             loadSets();
             loadDex();
         });
-
-        function setLangBtns(lang) {
-            document.querySelectorAll('.lang-btn').forEach(b => {
-                b.classList.toggle('active', b.textContent.trim() === lang.toUpperCase());
-            });
-        }
-
-        async function loadDex() {
-            try {
-                const r = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1025');
-                const d = await r.json();
-                d.results.forEach((p, i) => { pokemonDexCache[p.name] = i + 1; });
-            } catch (e) {}
-        }
-
-        function getDexId(card) {
-            if (card?.dexId) return card.dexId;
-            if (card?.name) {
-                const n = card.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (pokemonDexCache[n]) return pokemonDexCache[n];
-            }
-            return null;
-        }
-
-        async function fetchJSON(url) {
-            const r = await fetch(url);
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            const d = await r.json();
-            if (currentLang === 'en') return d.data || [];
-            return d || [];
-        }
-
-        function api() { return APIS[currentLang]; }
-
-        let currentMode = 'sets';
-        let jpSetOfficialCounts = {};
-
-        function setMode(mode) {
-            currentMode = mode;
-            document.getElementById('btn-mode-sets').classList.toggle('active', mode === 'sets');
-            document.getElementById('btn-mode-cards').classList.toggle('active', mode === 'cards');
-            document.getElementById('sets-mode').style.display = mode === 'sets' ? '' : 'none';
-            document.getElementById('cards-mode').style.display = mode === 'cards' ? '' : 'none';
-            if (mode === 'sets') {
-                if (!allSets.length) loadSets();
-            } else {
-                document.getElementById('globalCardsContent').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Type a card name to search</p>';
-            }
-        }
-
-        function showView(view) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById('btn-expansions').classList.remove('active');
-            document.getElementById('btn-collection').classList.remove('active');
-            if (view === 'expansions') {
-                document.getElementById('view-expansions').classList.add('active');
-                document.getElementById('btn-expansions').classList.add('active');
-            } else if (view === 'cards') {
-                document.getElementById('view-cards').classList.add('active');
-            } else if (view === 'collection') {
-                document.getElementById('view-collection').classList.add('active');
-                document.getElementById('btn-collection').classList.add('active');
-                renderCollection();
-            }
-        }
-
-        function switchLang(lang) {
-            currentLang = lang;
-            localStorage.setItem('tcgLang', lang);
-            setLangBtns(lang);
-            allSets = [];
-            currentSet = null;
-            allCards = [];
-            currentPage = 1;
-            showView('expansions');
-            loadSets();
-        }
-
-        async function loadSets() {
-            document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading expansions...</span></div>';
-            try {
-                const a = api();
-                const data = await a.sets();
-                allSets = data.map(s => a.setMap(s));
-                const setMap = currentLang === 'ja' ? JP_EN_SET_MAP : currentLang === 'ko' ? KR_EN_SET_MAP : {};
-                const enSubMap = currentLang === 'en' ? EN_SUB_SET_MAP : {};
-                const effectiveMap = { ...enSubMap, ...setMap };
-                const hasMerging = currentLang === 'en' || currentLang === 'ja' || currentLang === 'ko';
-                if (hasMerging && Object.keys(effectiveMap).length > 0) {
-                    const usedSubIds = new Set(Object.keys(effectiveMap));
-                    const mainSetNames = {};
-                    allSets.forEach(s => { if (!usedSubIds.has(s.id)) mainSetNames[s.id.toLowerCase()] = s.id; });
-                    jpSetOfficialCounts = {};
-                    allSets.forEach(s => { jpSetOfficialCounts[s.id] = s.total || 0; });
-                    const grouped = {};
-                    allSets.forEach(s => {
-                        if (usedSubIds.has(s.id)) return;
-                        const mainId = s.id.toLowerCase();
-                        if (!grouped[mainId]) {
-                            grouped[mainId] = { id: s.id, name: s.name, total: s.total || 0, series: s.series, logo: s.logo, ids: [s.id], releaseDate: s.releaseDate };
-                        }
-                    });
-                    allSets.forEach(s => {
-                        if (!usedSubIds.has(s.id)) return;
-                        const parentId = effectiveMap[s.id];
-                        const parentKey = parentId.toLowerCase();
-                        if (grouped[parentKey]) {
-                            if (!grouped[parentKey].ids.includes(s.id)) {
-                                grouped[parentKey].ids.push(s.id);
-                                grouped[parentKey].total = (grouped[parentKey].total || 0) + (s.total || 0);
-                            }
-                            if (!grouped[parentKey].logo) grouped[parentKey].logo = s.logo;
-                        }
-                    });
-                    allSets = Object.values(grouped).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || ''));
-                }
-                populateSeriesFilter();
-                renderExpansions(allSets);
-            } catch (e) {
-                document.getElementById('expansionsContent').innerHTML = `<div class="error-msg">Error loading expansions. ${e.message}</div>`;
-            }
-        }
-
-        function populateSeriesFilter() {
-            const series = [...new Set(allSets.map(s => s.series).filter(Boolean))].sort();
-            const sel = document.getElementById('seriesFilter');
-            sel.innerHTML = '<option value="">All Series</option>';
-            series.forEach(s => { sel.innerHTML += `<option value="${s}">${s}</option>`; });
-        }
-
-        function getOwnedCount(setId) { return Object.keys(collection).filter(id => collection[id]?.set?.id === setId).length; }
-
-        function filterExpansions() {
-            const search = document.getElementById('expansionSearch').value.toLowerCase();
-            const series = document.getElementById('seriesFilter').value;
-            const filtered = allSets.filter(s => {
-                const m1 = s.name.toLowerCase().includes(search) || (s.series || '').toLowerCase().includes(search);
-                const m2 = !series || s.series === series;
-                return m1 && m2;
-            });
             renderExpansions(filtered);
         }
 
         function renderExpansions(sets) {
             const c = document.getElementById('expansionsContent');
             if (!sets.length) { c.innerHTML = '<div class="empty-state"><h3>No expansions found</h3></div>'; return; }
-            const a = api();
+            const a = api;
             c.innerHTML = `<div class="expansions-grid">${sets.map(set => {
                 const owned = getOwnedCount(set.id);
                 const logo = set.logo;
@@ -741,87 +373,36 @@
             document.getElementById('rarityFilter').innerHTML = '<option value="">All Rarities</option>';
             currentSet = setObj;
 
-            const a = api();
+            const a = api;
             try {
                 let allRawCards = [];
                 const setIds = setObj.ids || [setId];
 
-                if (currentLang === 'en') {
-                    for (const sid of setIds) {
-                        const res = await a.cards(sid, 1, perPage);
-                        allRawCards = allRawCards.concat(res.data || []);
-                    }
-                } else if (currentLang === 'ja' || currentLang === 'ko') {
-                    for (const sid of setIds) {
-                        const res = await a.cards(sid, 1, perPage);
-                        (res || []).forEach(c => { c._setRawId = sid; c._setName = setObj.name; });
-                        allRawCards = allRawCards.concat(res || []);
-                    }
+                for (const sid of setIds) {
+                    const res = await a.cards(sid, 1, perPage);
+                    allRawCards = allRawCards.concat(res.data || []);
                 }
                 allCards = (allRawCards || []).map(c => a.cardMap(c, setObj));
 
-                if (currentLang === 'en') {
-                    const setTotal = currentSet?.total || 0;
-                    allCards.forEach(card => {
-                        if (!card.rarity || card.rarity === '') {
-                            const num = parseInt(card.number, 10) || 0;
-                            const sub = card.subtype || '';
-                            if (sub === 'VMAX') card.rarity = 'Rare Holo VMAX';
-                            else if (sub === 'VSTAR') card.rarity = 'Rare Holo VSTAR';
-                            else if (sub === 'V' || sub === 'ex' || sub === 'GX') card.rarity = 'Rare Holo ' + sub;
-                            else if (num > setTotal && setTotal > 0) {
-                                const range = setTotal * 0.5;
-                                const pos = num - setTotal;
-                                if (pos > range * 0.8) card.rarity = 'Hyper Rare';
-                                else if (pos > range * 0.6) card.rarity = 'Special Illustration Rare';
-                                else if (pos > range * 0.3) card.rarity = 'Illustration Rare';
-                                else card.rarity = 'Rare Secret';
-                            }
-                            else card.rarity = 'Rare';
+                const setTotal = currentSet?.total || 0;
+                allCards.forEach(card => {
+                    if (!card.rarity || card.rarity === '') {
+                        const num = parseInt(card.number, 10) || 0;
+                        const sub = card.subtype || '';
+                        if (sub === 'VMAX') card.rarity = 'Rare Holo VMAX';
+                        else if (sub === 'VSTAR') card.rarity = 'Rare Holo VSTAR';
+                        else if (sub === 'V' || sub === 'ex' || sub === 'GX') card.rarity = 'Rare Holo ' + sub;
+                        else if (num > setTotal && setTotal > 0) {
+                            const range = setTotal * 0.5;
+                            const pos = num - setTotal;
+                            if (pos > range * 0.8) card.rarity = 'Hyper Rare';
+                            else if (pos > range * 0.6) card.rarity = 'Special Illustration Rare';
+                            else if (pos > range * 0.3) card.rarity = 'Illustration Rare';
+                            else card.rarity = 'Rare Secret';
                         }
-                    });
-                }
-
-                if (currentLang === 'ja') {
-                    const batchSize = 20;
-                    const numCards = allCards.length;
-                    for (let i = 0; i < numCards; i += batchSize) {
-                        const batch = allCards.slice(i, i + batchSize);
-                        const promises = batch.map(card =>
-                            fetch(`https://api.tcgdex.net/v2/ja/cards/${card.id}`).then(r => r.json()).catch(() => null)
-                        );
-                        const results = await Promise.all(promises);
-                        results.forEach((full, j) => {
-                            if (full) {
-                                const idx = i + j;
-                                const prev = allCards[idx];
-                                const official = full.set?.cardCount?.official || 0;
-                                const total = full.set?.cardCount?.total || 0;
-                                const num = parseInt(full.localId, 10);
-                                const mapped = a.cardMap(full, setObj);
-                                mapped.number = prev.number || mapped.number;
-                                mapped.id = prev.id || mapped.id;
-                                if (!full.rarity || full.rarity === '') {
-                                    if (num > official && total > official) {
-                                        const range = total - official;
-                                        const pos = num - official;
-                                        if (pos >= range * 0.9) mapped.rarity = 'Hyper Rare';
-                                        else if (pos >= range * 0.6) mapped.rarity = 'Special Illustration Rare';
-                                        else if (pos >= range * 0.3) mapped.rarity = 'Illustration Rare';
-                                        else if (pos >= range * 0.15) mapped.rarity = 'Rare Secret';
-                                        else mapped.rarity = 'Rare Ultra';
-                                    }
-                                }
-                                mapped.image = full.image || prev.image;
-                                allCards[idx] = mapped;
-                            }
-                        });
-                        populateRarityFilter();
-                        renderCards();
-                        updateStats();
+                        else card.rarity = 'Rare';
                     }
-                    return;
-                }
+                });
 
                 totalCardCount = allCards.length;
                 populateRarityFilter();
@@ -850,7 +431,7 @@
         }
 
         function getCardImageSrc(card, set) {
-            const a = api();
+            const a = api;
             const primary = a.cardImage(card, set);
             if (!primary) return null;
             return primary;
@@ -865,7 +446,7 @@
         function renderCards() {
             const c = document.getElementById('cardsContent');
             if (!allCards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            const a = api();
+            const a = api;
             const start = (currentPage - 1) * perPage;
             const pageCards = allCards.slice(start, start + perPage);
 
@@ -906,24 +487,16 @@
             globalSearchTimeout = setTimeout(async () => {
                 document.getElementById('globalCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
                 try {
-                    let cards;
-                    if (currentLang === 'en') {
-                        let all = [];
-                        let page = 1;
-                        while (true) {
-                            const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(q)}*&page=${page}&pageSize=250&orderBy=number`);
-                            const d = await res.json();
-                            all = all.concat(d.data || []);
-                            if (!d.data || d.data.length < 250) break;
-                            page++;
-                        }
-                        cards = all.map(c => APIS.en.cardMap(c));
-                    } else {
-                        const setMap = currentLang === 'ja' ? JP_EN_SET_MAP : KR_EN_SET_MAP;
-                        cards = await fetchJSON(`https://api.tcgdex.net/v2/${currentLang === 'ja' ? 'ja' : 'en'}/cards?name=${encodeURIComponent(q)}&pagination:itemsPerPage=250`);
-                        cards = (cards || []).map(c => APIS[currentLang].cardMap(c, { id: c.set?.id || '', name: c.set?.name || '' }));
+                    let all = [];
+                    let page = 1;
+                    while (true) {
+                        const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(q)}*&page=${page}&pageSize=250&orderBy=number`);
+                        const d = await res.json();
+                        all = all.concat(d.data || []);
+                        if (!d.data || d.data.length < 250) break;
+                        page++;
                     }
-                    globalSearchCards = cards || [];
+                    globalSearchCards = all.map(c => api.cardMap(c));
                     renderGlobalCards(globalSearchCards);
                 } catch (e) {
                     document.getElementById('globalCardsContent').innerHTML = `<div class="error-msg">Error. ${e.message}</div>`;
@@ -934,7 +507,7 @@
         function renderGlobalCards(cards) {
             const c = document.getElementById('globalCardsContent');
             if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            const a = api();
+            const a = api;
             c.innerHTML = `<div class="cards-grid">${cards.map(card => {
                 const owned = !!collection[card.id];
                 const setName = card.set?.name || card.set?.id || '';
@@ -970,7 +543,7 @@
                 targetSet = allSets.find(s => s.ids && s.ids.includes(setId));
             }
             if (!targetSet) {
-                toast('Set not found in ' + APIS[currentLang].name);
+                toast('Set not found');
                 return;
             }
             await openSet(targetSet.id);
@@ -999,7 +572,7 @@
         }
 
         async function fetchCardsPage(page) {
-            const a = api();
+            const a = api;
             const cards = await a.cards(currentSet.id, page, perPage);
             return (cards || []).map(c => a.cardMap(c, currentSet));
         }
@@ -1022,7 +595,7 @@
         function renderFilteredCards(cards) {
             const c = document.getElementById('cardsContent');
             if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            const a = api();
+            const a = api;
             const start = (currentPage - 1) * perPage;
             const pageCards = cards.slice(start, start + perPage);
 
@@ -1088,9 +661,9 @@
             } else {
                 const sourceCards = currentMode === 'cards' ? globalSearchCards : allCards;
                 const brief = sourceCards.find(c => c.id === cardId);
-                const a = api();
+                const a = api;
                 collection[cardId] = {
-                    ...brief, quantity: 1, dateAdded: new Date().toISOString(), lang: currentLang
+                    ...brief, quantity: 1, dateAdded: new Date().toISOString()
                 };
             }
             localStorage.setItem('pokemonCollection', JSON.stringify(collection));
