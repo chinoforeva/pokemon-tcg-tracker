@@ -345,12 +345,15 @@
                     releaseDate: s.releaseDate,
                     logo: s.logo ? s.logo + '.png' : `https://images.pokemontcg.io/${JP_EN_SET_MAP[s.id] || s.id}/logo.png`
                 }),
-                cardMap: (c, set) => ({
-                    id: c.id, name: c.name, number: c.localId, rarity: c.rarity || '',
-                    set: c.set ? { id: c.set.id, name: c.set.name } : set ? { id: set.id, name: set.name } : null,
-                    hp: c.hp || null, types: c.types || [], dexId: c.dexId?.[0] || null,
-                    image: c.image, stage: c.stage || '', subtype: c.subtype || ''
-                }),
+                cardMap: (c, set) => {
+                    const sid = c._setRawId || c.set?.id || set?.id || '';
+                    return {
+                        id: c.id, name: c.name, number: c.localId, rarity: c.rarity || '',
+                        set: c.set ? { id: c.set.id, name: c.set.name } : set ? { id: sid, name: set.name } : null,
+                        hp: c.hp || null, types: c.types || [], dexId: c.dexId?.[0] || null,
+                        image: c.image, stage: c.stage || '', subtype: c.subtype || ''
+                    };
+                },
                 mapCardId: (tcgSetId, num) => null,
                 hasBuiltInImages: false
             },
@@ -581,6 +584,7 @@
         function api() { return APIS[currentLang]; }
 
         let currentMode = 'sets';
+        let jpSetOfficialCounts = {};
 
         function setMode(mode) {
             currentMode = mode;
@@ -631,6 +635,8 @@
                 allSets = data.map(s => a.setMap(s));
                 if (currentLang === 'ja' || currentLang === 'ko') {
                     const setMap = currentLang === 'ja' ? JP_EN_SET_MAP : KR_EN_SET_MAP;
+                    jpSetOfficialCounts = {};
+                    allSets.forEach(s => { jpSetOfficialCounts[s.id] = s.total || 0; });
                     const grouped = {};
                     allSets.forEach(s => {
                         const enId = (setMap[s.id] || s.id).toLowerCase();
@@ -718,6 +724,7 @@
                 if ((currentLang === 'ja' || currentLang === 'ko') && setObj.ids) {
                     for (const sid of setObj.ids) {
                         const res = await a.cards(sid, 1, perPage);
+                        (res || []).forEach(c => { c._setRawId = sid; });
                         allRawCards = allRawCards.concat(res || []);
                     }
                 } else {
@@ -725,8 +732,47 @@
                     allRawCards = res.data || res;
                 }
                 allCards = (allRawCards || []).map(c => a.cardMap(c, setObj));
-                totalCardCount = allCards.length;
 
+                if (currentLang === 'ja') {
+                    const batchSize = 15;
+                    for (let i = 0; i < allCards.length; i += batchSize) {
+                        const batch = allCards.slice(i, i + batchSize);
+                        const promises = batch.map(card =>
+                            fetch(`https://api.tcgdex.net/v2/ja/cards/${card.id}`).then(r => r.json()).catch(() => null)
+                        );
+                        const results = await Promise.all(promises);
+                        results.forEach((full, j) => {
+                            if (full) {
+                                const idx = i + j;
+                                if (full.rarity) {
+                                    allCards[idx].rarity = full.rarity;
+                                } else if (full.localId && full.set?.cardCount) {
+                                    const num = parseInt(full.localId, 10);
+                                    const official = full.set.cardCount.official || full.set.cardCount.total;
+                                    if (num > official) {
+                                        const total = full.set.cardCount.total;
+                                        const range = total - official;
+                                        const pos = num - official;
+                                        if (pos >= range * 0.9) allCards[idx].rarity = 'Hyper Rare';
+                                        else if (pos >= range * 0.6) allCards[idx].rarity = 'Special Illustration Rare';
+                                        else if (pos >= range * 0.3) allCards[idx].rarity = 'Illustration Rare';
+                                        else if (pos >= range * 0.15) allCards[idx].rarity = 'Rare Secret';
+                                        else allCards[idx].rarity = 'Rare Ultra';
+                                    }
+                                }
+                                allCards[idx].hp = full.hp || allCards[idx].hp;
+                                allCards[idx].stage = full.stage || allCards[idx].stage;
+                                allCards[idx].dexId = full.dexId?.[0] || allCards[idx].dexId;
+                            }
+                        });
+                        populateRarityFilter();
+                        renderCards();
+                        updateStats();
+                    }
+                    return;
+                }
+
+                totalCardCount = allCards.length;
                 populateRarityFilter();
                 renderCards();
                 updateStats();
