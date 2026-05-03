@@ -450,6 +450,12 @@
             'S12': 'swsh12', 'S12a': 'swsh12',
         };
 
+        const EN_SUB_SET_MAP = {
+            'swsh9tg': 'swsh9', 'swsh10tg': 'swsh10', 'swsh11tg': 'swsh11', 'swsh12tg': 'swsh12',
+            'swsh12pt5gg': 'swsh12pt5', 'swsh45sv': 'swsh45', 'sma': 'sm115',
+            'cel25c': 'cel25',
+        };
+
         const KR_EN_SET_MAP = {
             'SM1M': 'sm1', 'SM1S': 'sm1', 'SM1+': 'sm1',
             'SM2K': 'sm2', 'SM2L': 'sm2', 'sm2+': 'sm2',
@@ -639,26 +645,37 @@
                 const a = api();
                 const data = await a.sets();
                 allSets = data.map(s => a.setMap(s));
-                if (currentLang === 'ja' || currentLang === 'ko') {
-                    const setMap = currentLang === 'ja' ? JP_EN_SET_MAP : KR_EN_SET_MAP;
+                const setMap = currentLang === 'ja' ? JP_EN_SET_MAP : currentLang === 'ko' ? KR_EN_SET_MAP : {};
+                const enSubMap = currentLang === 'en' ? EN_SUB_SET_MAP : {};
+                const effectiveMap = { ...enSubMap, ...setMap };
+                const hasMerging = currentLang === 'en' || currentLang === 'ja' || currentLang === 'ko';
+                if (hasMerging && Object.keys(effectiveMap).length > 0) {
+                    const usedSubIds = new Set(Object.keys(effectiveMap));
+                    const mainSetNames = {};
+                    allSets.forEach(s => { if (!usedSubIds.has(s.id)) mainSetNames[s.id.toLowerCase()] = s.id; });
                     jpSetOfficialCounts = {};
                     allSets.forEach(s => { jpSetOfficialCounts[s.id] = s.total || 0; });
                     const grouped = {};
                     allSets.forEach(s => {
-                        const enId = (setMap[s.id] || s.id).toLowerCase();
-                        if (!grouped[enId]) {
-                            grouped[enId] = { id: s.id, name: s.name, total: s.total || 0, series: s.series, logo: s.logo, ids: [s.id] };
-                        } else {
-                            if (!grouped[enId].ids.includes(s.id)) {
-                                grouped[enId].ids.push(s.id);
-                                grouped[enId].id += ',' + s.id;
-                                grouped[enId].total = (grouped[enId].total || 0) + (s.total || 0);
-                                if (!grouped[enId].name.includes(s.name)) grouped[enId].name += ' / ' + s.name;
-                            }
-                            if (!grouped[enId].logo) grouped[enId].logo = s.logo;
+                        if (usedSubIds.has(s.id)) return;
+                        const mainId = s.id.toLowerCase();
+                        if (!grouped[mainId]) {
+                            grouped[mainId] = { id: s.id, name: s.name, total: s.total || 0, series: s.series, logo: s.logo, ids: [s.id], releaseDate: s.releaseDate };
                         }
                     });
-                    allSets = Object.values(grouped).sort((a, b) => (b.total || 0) - (a.total || 0));
+                    allSets.forEach(s => {
+                        if (!usedSubIds.has(s.id)) return;
+                        const parentId = effectiveMap[s.id];
+                        const parentKey = parentId.toLowerCase();
+                        if (grouped[parentKey]) {
+                            if (!grouped[parentKey].ids.includes(s.id)) {
+                                grouped[parentKey].ids.push(s.id);
+                                grouped[parentKey].total = (grouped[parentKey].total || 0) + (s.total || 0);
+                            }
+                            if (!grouped[parentKey].logo) grouped[parentKey].logo = s.logo;
+                        }
+                    });
+                    allSets = Object.values(grouped).sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || ''));
                 }
                 populateSeriesFilter();
                 renderExpansions(allSets);
@@ -727,15 +744,19 @@
             const a = api();
             try {
                 let allRawCards = [];
-                if ((currentLang === 'ja' || currentLang === 'ko') && setObj.ids) {
-                    for (const sid of setObj.ids) {
+                const setIds = setObj.ids || [setId];
+
+                if (currentLang === 'en') {
+                    for (const sid of setIds) {
+                        const res = await a.cards(sid, 1, perPage);
+                        allRawCards = allRawCards.concat(res.data || []);
+                    }
+                } else if (currentLang === 'ja' || currentLang === 'ko') {
+                    for (const sid of setIds) {
                         const res = await a.cards(sid, 1, perPage);
                         (res || []).forEach(c => { c._setRawId = sid; c._setName = setObj.name; });
                         allRawCards = allRawCards.concat(res || []);
                     }
-                } else {
-                    const res = await a.cards(setId, 1, perPage);
-                    allRawCards = res.data || res;
                 }
                 allCards = (allRawCards || []).map(c => a.cardMap(c, setObj));
 
@@ -782,29 +803,21 @@
 
                 totalCardCount = allCards.length;
                 populateRarityFilter();
+                currentPage = 1;
                 renderCards();
                 updateStats();
-                document.getElementById('prevPage').closest('.pagination').style.display = 'none';
+                updatePageInfo();
             } catch (e) {
                 document.getElementById('cardsContent').innerHTML = `<div class="error-msg">Error loading cards. ${e.message}</div>`;
             }
         }
 
         function updatePageInfo() {
-            if (currentLang === 'en') {
-                const totalPages = Math.max(1, Math.ceil(totalCardCount / perPage));
-                document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
-                document.getElementById('prevPage').disabled = currentPage <= 1;
-                document.getElementById('nextPage').disabled = currentPage >= totalPages;
-            } else {
-                const loaded = currentPage * perPage;
-                const total = currentSet?.total || loaded;
-                const totalPages = Math.max(1, Math.ceil(total / perPage));
-                const hasNext = loaded < total;
-                document.getElementById('pageInfo').textContent = `Page ${currentPage}`;
-                document.getElementById('prevPage').disabled = currentPage <= 1;
-                document.getElementById('nextPage').disabled = !hasNext;
-            }
+            const totalPages = Math.max(1, Math.ceil(totalCardCount / perPage));
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('prevPage').disabled = currentPage <= 1;
+            document.getElementById('nextPage').disabled = currentPage >= totalPages;
+            document.getElementById('prevPage').closest('.pagination').style.display = totalPages > 1 ? '' : 'none';
         }
 
         function populateRarityFilter() {
@@ -831,8 +844,10 @@
             const c = document.getElementById('cardsContent');
             if (!allCards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
             const a = api();
+            const start = (currentPage - 1) * perPage;
+            const pageCards = allCards.slice(start, start + perPage);
 
-            c.innerHTML = `<div class="cards-grid">${allCards.map(card => {
+            c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
                 const owned = !!collection[card.id];
                 const img = getCardImageSrc(card, currentSet);
                 const fallback = getCardFallbackSrc(card, currentSet);
@@ -975,14 +990,21 @@
                 const m2 = !rarity || c.rarity === rarity;
                 return m1 && m2;
             });
+            totalCardCount = filtered.length;
+            currentPage = 1;
             renderFilteredCards(filtered);
             updateStatsFiltered(filtered);
+            updatePageInfo();
         }
 
         function renderFilteredCards(cards) {
             const c = document.getElementById('cardsContent');
             if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            c.innerHTML = `<div class="cards-grid">${cards.map(card => {
+            const a = api();
+            const start = (currentPage - 1) * perPage;
+            const pageCards = cards.slice(start, start + perPage);
+
+            c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
                 const owned = !!collection[card.id];
                 const img = getCardImageSrc(card, currentSet);
                 const fallback = getCardFallbackSrc(card, currentSet);
@@ -1015,23 +1037,19 @@
         }
 
         async function changePage(dir) {
-            currentPage += dir;
-            document.getElementById('cardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading...</span></div>';
-            try {
-                const cards = await fetchCardsPage(currentPage);
-                allCards = cards;
-
-                if (currentLang === 'en' && cards.totalCount) {
-                    totalCardCount = cards.totalCount;
-                }
-
+            const totalPages = Math.ceil(totalCardCount / perPage);
+            const newPage = currentPage + dir;
+            if (newPage < 1 || newPage > totalPages) return;
+            currentPage = newPage;
+            const search = document.getElementById('cardSearch').value.toLowerCase();
+            const rarity = document.getElementById('rarityFilter').value;
+            if (search || rarity) {
+                filterCards();
+            } else {
                 renderCards();
-                updateStats();
-                updatePageInfo();
-                window.scrollTo(0, 0);
-            } catch (e) {
-                document.getElementById('cardsContent').innerHTML = `<div class="error-msg">Error. ${e.message}</div>`;
             }
+            updatePageInfo();
+            window.scrollTo(0, 0);
         }
 
         function updateStats() {
