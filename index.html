@@ -828,7 +828,7 @@
                 const owned = !!collection[card.id];
                 const img = getCardImageSrc(card, currentSet);
                 const fallback = getCardFallbackSrc(card, currentSet);
-                return `<div class="card-tcg ${owned ? 'owned' : ''}">
+                return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${img
@@ -893,6 +893,7 @@
             c.innerHTML = `<div class="cards-grid">${cards.map(card => {
                 const owned = !!collection[card.id];
                 const setName = card.set?.name || card.set?.id || '';
+                const setId = card.set?.id || card._setRawId || '';
                 return `<div class="card-tcg ${owned ? 'owned' : ''}">
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
@@ -905,12 +906,51 @@
                         <div class="card-meta">${setName ? setName + ' ' : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || card.localId || ''}</div>
                     </div>
                     <div class="card-actions">
+                        <button class="remove-btn" onclick="goToCard('${card.id}', '${setId}')" style="margin-bottom:4px;">Go to card</button>
                         ${owned
                             ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>`
                             : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
                     </div>
                 </div>`;
             }).join('')}</div>`;
+        }
+
+        async function goToCard(cardId, setId) {
+            if (!setId) {
+                toast('Set not found for this card');
+                return;
+            }
+            let targetSet = allSets.find(s => s.id === setId);
+            if (!targetSet) {
+                targetSet = allSets.find(s => s.ids && s.ids.includes(setId));
+            }
+            if (!targetSet) {
+                toast('Set not found in ' + APIS[currentLang].name);
+                return;
+            }
+            await openSet(targetSet.id);
+            setTimeout(() => {
+                const el = document.querySelector(`.card-tcg[data-card-id="${cardId}"]`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.style.boxShadow = '0 0 0 3px var(--accent), 0 0 30px var(--accent-glow)';
+                    setTimeout(() => { el.style.boxShadow = ''; }, 2000);
+                } else {
+                    const nameInput = document.getElementById('cardSearch');
+                    if (nameInput) {
+                        nameInput.value = cardId.split('-').slice(1).join('-');
+                        filterCards();
+                    }
+                }
+            }, 500);
+        }
+
+        function toast(msg) {
+            const t = document.createElement('div');
+            t.className = 'toast';
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
         }
 
         async function fetchCardsPage(page) {
@@ -938,7 +978,7 @@
                 const owned = !!collection[card.id];
                 const img = getCardImageSrc(card, currentSet);
                 const fallback = getCardFallbackSrc(card, currentSet);
-                return `<div class="card-tcg ${owned ? 'owned' : ''}">
+                return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${img
