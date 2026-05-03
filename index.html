@@ -288,7 +288,7 @@
                 setSymbol: (s) => s.images?.symbol,
                 cardImage: (c) => c.image,
                 cardImageLarge: (c) => c.imageLarge,
-                setMap: (s) => ({ id: s.id, name: s.name, total: s.total, series: s.series, releaseDate: s.releaseDate }),
+                setMap: (s) => ({ id: s.id, name: s.name, total: s.total, series: s.series, releaseDate: s.releaseDate, images: s.images }),
                 cardMap: (c) => ({
                     id: c.id, name: c.name, number: c.number, rarity: c.rarity,
                     set: { id: c.set.id, name: c.set.name },
@@ -324,7 +324,8 @@
                 setMap: (s) => ({
                     id: s.id, name: s.name, total: s.cardCount?.total,
                     series: s.serie?.name || getJpSeriesName(s.id),
-                    releaseDate: s.releaseDate
+                    releaseDate: s.releaseDate,
+                    logo: s.logo ? s.logo + '.png' : `https://images.pokemontcg.io/${JP_EN_SET_MAP[s.id] || s.id}/logo.png`
                 }),
                 cardMap: (c, set) => ({
                     id: c.id, name: c.name, number: c.localId, rarity: c.rarity || '',
@@ -362,7 +363,11 @@
                 },
                 cardImage: (c) => c.images?.small || c.image,
                 cardImageLarge: (c) => c.images?.large || c.image,
-                setMap: (s) => ({ id: s.id, name: s.name, total: s.cardCount?.total, series: getKrSeries(s.id) }),
+                setMap: (s) => {
+                    const enId = KR_EN_SET_MAP[s.id] || s.id;
+                    return { id: s.id, name: s.name, total: s.cardCount?.total, series: getKrSeries(s.id),
+                        logo: `https://images.pokemontcg.io/${enId}/logo.png` };
+                },
                 cardMap: (c, set) => ({
                     id: c.id, name: c.name, number: c.number || c.localId, rarity: c.rarity || '',
                     set: set ? { id: set.id, name: set.name } : { id: c.set?.id || '', name: c.set?.name || '' },
@@ -623,12 +628,12 @@
             const a = api();
             c.innerHTML = `<div class="expansions-grid">${sets.map(set => {
                 const owned = getOwnedCount(set.id);
-                const logo = a.setLogo(allSets.find(s => s.id === set.id));
+                const logo = set.logo;
                 return `<div class="expansion-card" onclick="openSet('${set.id.replace(/'/g, "\\'")}')">
                     <div class="expansion-logo-wrap">
                         ${logo
-                            ? `<img src="${logo}" alt="${set.name}" onerror="this.parentElement.innerHTML='<span class=\\'no-logo\\'>${set.id}</span>'">`
-                            : `<span class="no-logo">${set.id}</span>`}
+                            ? `<img src="${logo}" alt="${set.name}" onerror="this.parentElement.innerHTML='<span class=\\'no-logo\\'>${set.name || set.id}</span>'">`
+                            : `<span class="no-logo">${set.name || set.id}</span>`}
                     </div>
                     <div class="expansion-info">
                         <div class="expansion-name">${set.name}</div>
