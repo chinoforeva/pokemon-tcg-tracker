@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokémon TCG Collection Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0a0a1a; --bg-secondary: #12122a; --bg-card: #1a1a3e;
+            --bg-hover: #252555; --accent: #e94560; --accent-glow: rgba(233,69,96,0.3);
+            --success: #00d4aa; --success-glow: rgba(0,212,170,0.3); --warning: #ffd93d;
+            --text-primary: #fff; --text-secondary: rgba(255,255,255,0.7);
+            --text-muted: rgba(255,255,255,0.4); --border: rgba(255,255,255,0.08);
+            --border-hover: rgba(255,255,255,0.15); --glass: rgba(255,255,255,0.03);
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            background-image: radial-gradient(ellipse at top, rgba(233,69,96,0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom, rgba(0,212,170,0.05) 0%, transparent 50%);
+            min-height: 100vh; color: var(--text-primary);
+        }
+        header {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(10,10,26,0.85); backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border); padding: 1rem 2rem;
+        }
+        .header-content {
+            max-width: 1400px; margin: 0 auto;
+            display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;
+        }
+        .logo { display: flex; align-items: center; gap: 0.75rem; }
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, var(--accent), var(--warning));
+            border-radius: 10px; display: flex; align-items: center; justify-content: center;
+        }
+        .logo h1 {
+            font-size: 1.4rem; font-weight: 800;
+            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.8));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        nav { display: flex; gap: 0.5rem; }
+        .nav-btn {
+            padding: 0.6rem 1.2rem; background: transparent; border: 1px solid var(--border);
+            border-radius: 10px; color: var(--text-secondary); font-weight: 500; font-size: 0.85rem;
+            cursor: pointer; transition: all 0.2s; font-family: inherit;
+        }
+        .nav-btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
+        .nav-btn.active { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 4px 12px var(--accent-glow); }
+        .lang-selector { display: flex; gap: 0.25rem; background: var(--glass); padding: 0.3rem; border-radius: 10px; border: 1px solid var(--border); }
+        .lang-btn {
+            padding: 0.4rem 0.7rem; background: transparent; border: none; border-radius: 8px;
+            color: var(--text-muted); font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; font-family: inherit;
+        }
+        .lang-btn:hover { color: var(--text-primary); }
+        .lang-btn.active { background: var(--bg-card); color: var(--text-primary); }
+        main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .view { display: none; animation: fadeIn 0.3s ease; }
+        .view.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .section-title { font-size: 1.6rem; font-weight: 700; }
+        .controls { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .search-box { flex: 1; min-width: 200px; position: relative; }
+        .search-box input {
+            width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+            color: var(--text-primary); font-size: 0.9rem; outline: none; transition: all 0.2s; font-family: inherit;
+        }
+        .search-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .search-box::before {
+            content: ''; position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(255,255,255,0.5)' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") center/contain no-repeat;
+        }
+        .filter-select {
+            padding: 0.75rem 1rem; background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; color: var(--text-secondary); font-size: 0.85rem; min-width: 140px; font-family: inherit; cursor: pointer;
+        }
+        .filter-select option { background: var(--bg-card); }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem; position: relative; overflow: hidden; }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--warning)); }
+        .stat-value { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, var(--success), var(--warning)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .stat-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
+        .expansions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.2rem; }
+        .expansion-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; cursor: pointer; transition: all 0.3s; }
+        .expansion-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px var(--accent-glow); }
+        .expansion-logo-wrap {
+            background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
+            padding: 1.5rem 1rem 1rem; display: flex; align-items: center; justify-content: center; height: 100px;
+        }
+        .expansion-logo-wrap img { max-height: 80px; max-width: 100%; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); }
+        .expansion-logo-wrap .no-logo { font-size: 1.1rem; color: var(--text-muted); text-align: center; }
+        .expansion-info { padding: 0.8rem 1rem 1rem; border-top: 1px solid var(--border); }
+        .expansion-name { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .expansion-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); }
+        .expansion-badge { padding: 0.2rem 0.5rem; background: var(--success); color: var(--bg-primary); border-radius: 4px; font-weight: 600; font-size: 0.65rem; }
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
+        .card-tcg { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: all 0.3s; position: relative; }
+        .card-tcg:hover { transform: translateY(-3px); border-color: var(--border-hover); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+        .card-tcg.owned { border-color: var(--success); }
+        .card-tcg.owned .owned-badge { display: flex; }
+        .owned-badge {
+            display: none; position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
+            background: var(--success); border-radius: 50%; align-items: center; justify-content: center;
+            color: var(--bg-primary); font-weight: 700; font-size: 0.8rem; z-index: 2; box-shadow: 0 2px 8px var(--success-glow);
+        }
+        .card-img-wrap { width: 100%; aspect-ratio: 245/340; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .card-img-wrap .no-img { color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 0.5rem; }
+        .card-details { padding: 0.7rem 0.8rem; }
+        .card-name { font-weight: 600; font-size: 0.8rem; margin-bottom: 0.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-meta { font-size: 0.7rem; color: var(--text-muted); }
+        .card-actions { padding: 0 0.8rem 0.8rem; }
+        .add-btn, .remove-btn { width: 100%; padding: 0.5rem; border: none; border-radius: 8px; font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        .add-btn { background: var(--success); color: var(--bg-primary); }
+        .add-btn:hover { background: #00ffcc; }
+        .remove-btn { background: rgba(233,69,96,0.15); color: var(--accent); border: 1px solid rgba(233,69,96,0.3); }
+        .remove-btn:hover { background: var(--accent); color: white; }
+        .back-link { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.9rem; cursor: pointer; margin-bottom: 1.5rem; padding: 0.5rem 0; transition: color 0.2s; background: none; border: none; font-family: inherit; }
+        .back-link:hover { color: var(--text-primary); }
+        .collection-sort { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-secondary); }
+        .collection-sort select { padding: 0.5rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.8rem; cursor: pointer; font-family: inherit; }
+        .collection-sort select option { background: var(--bg-card); }
+        .collection-list { display: flex; flex-direction: column; gap: 0.75rem; }
+        .collection-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 1rem; transition: all 0.2s; }
+        .collection-item:hover { border-color: var(--border-hover); background: var(--bg-hover); }
+        .collection-dex-num { font-size: 1.4rem; font-weight: 800; color: var(--accent); min-width: 45px; text-align: center; opacity: 0.8; }
+        .collection-thumb { width: 60px; height: 83px; border-radius: 8px; object-fit: cover; background: var(--bg-secondary); flex-shrink: 0; }
+        .collection-info { flex: 1; min-width: 0; }
+        .collection-info h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.3rem; }
+        .collection-info p { font-size: 0.75rem; color: var(--text-muted); }
+        .collection-qty { display: flex; align-items: center; gap: 0.5rem; background: var(--glass); padding: 0.4rem 0.6rem; border-radius: 10px; border: 1px solid var(--border); }
+        .qty-btn { width: 28px; height: 28px; border-radius: 8px; border: none; background: var(--bg-hover); color: var(--text-primary); font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+        .qty-btn:hover { background: var(--accent); }
+        .qty-display { font-weight: 700; min-width: 24px; text-align: center; }
+        .del-btn { padding: 0.4rem 0.8rem; background: rgba(233,69,96,0.1); border: 1px solid rgba(233,69,96,0.2); border-radius: 8px; color: var(--accent); font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        .del-btn:hover { background: var(--accent); color: white; }
+        .pagination { display: none; }
+        .page-btn { padding: 0.6rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-secondary); font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; font-size: 0.85rem; }
+        .page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text-primary); }
+        .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .page-info { color: var(--text-muted); font-size: 0.85rem; padding: 0 0.5rem; }
+        .empty-state { text-align: center; padding: 4rem 2rem; }
+        .empty-state h3 { font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--text-secondary); }
+        .empty-state p { color: var(--text-muted); font-size: 0.9rem; }
+        .loading-spinner { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 4rem; color: var(--text-muted); }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-msg { background: rgba(233,69,96,0.1); border: 1px solid rgba(233,69,96,0.3); padding: 1rem 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; color: var(--accent); text-align: center; font-size: 0.9rem; }
+        .toast {
+            position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+            background: var(--success); color: var(--bg-primary); padding: 0.75rem 1.5rem;
+            border-radius: 10px; font-weight: 600; font-size: 0.85rem; z-index: 9999;
+            box-shadow: 0 4px 20px var(--success-glow); font-family: inherit;
+        }
+        .hidden { display: none !important; }
+        @media (max-width: 768px) {
+            .header-content { flex-direction: column; gap: 0.75rem; }
+            nav { width: 100%; justify-content: center; }
+            main { padding: 1rem; }
+            .cards-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+            .collection-item { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <h1>Pokémon TCG Tracker</h1>
+            </div>
+            <nav>
+                <button class="nav-btn" id="btn-expansions" onclick="showView('expansions')">Expansions</button>
+                <button class="nav-btn" id="btn-collection" onclick="showView('collection')">My Collection</button>
+            </nav>
+            <div class="lang-selector">
+                <button class="lang-btn active" onclick="switchLang('en')">EN</button>
+                <button class="lang-btn" onclick="switchLang('ja')">JP</button>
+                <button class="lang-btn" onclick="switchLang('ko')">KR</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div id="view-expansions" class="view active">
+            <div class="section-header">
+                <h2 class="section-title" id="expansionsTitle">All Expansions</h2>
+            </div>
+            <div class="controls">
+                <div class="search-box">
+                    <input type="text" id="expansionSearch" placeholder="Search expansions..." oninput="filterExpansions()">
+                </div>
+                <select class="filter-select" id="seriesFilter" onchange="filterExpansions()">
+                    <option value="">All Series</option>
+                </select>
+            </div>
+            <div id="expansionsContent"></div>
+        </div>
+
+        <div id="view-cards" class="view">
+            <button class="back-link" onclick="showView('expansions')">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 8H3M8 3l-5 5 5 5"/></svg>
+                Back to Expansions
+            </button>
+            <div class="section-header">
+                <h2 class="section-title" id="cardsViewTitle"></h2>
+            </div>
+            <div class="stats-row">
+                <div class="stat-card"><div class="stat-value" id="totalCards">0</div><div class="stat-label">Total Cards</div></div>
+                <div class="stat-card"><div class="stat-value" id="ownedCards">0</div><div class="stat-label">Owned</div></div>
+                <div class="stat-card"><div class="stat-value" id="progressPercent">0%</div><div class="stat-label">Progress</div></div>
+            </div>
+            <div class="controls">
+                <div class="search-box">
+                    <input type="text" id="cardSearch" placeholder="Search cards..." oninput="filterCards()">
+                </div>
+                <select class="filter-select" id="rarityFilter" onchange="filterCards()">
+                    <option value="">All Rarities</option>
+                </select>
+            </div>
+            <div id="cardsContent"></div>
+            <div class="pagination">
+                <button class="page-btn" id="prevPage" onclick="changePage(-1)">Previous</button>
+                <span class="page-info" id="pageInfo"></span>
+                <button class="page-btn" id="nextPage" onclick="changePage(1)">Next</button>
+            </div>
+        </div>
+
+        <div id="view-collection" class="view">
+            <div class="section-header">
+                <h2 class="section-title">My Collection</h2>
+            </div>
+            <div class="stats-row">
+                <div class="stat-card"><div class="stat-value" id="colUnique">0</div><div class="stat-label">Unique Cards</div></div>
+                <div class="stat-card"><div class="stat-value" id="colTotal">0</div><div class="stat-label">Total Cards</div></div>
+                <div class="stat-card"><div class="stat-value" id="colExpansions">0</div><div class="stat-label">Expansions</div></div>
+                <div class="stat-card"><div class="stat-value" id="colSpecies">0</div><div class="stat-label">Pokémon Species</div></div>
+            </div>
+            <div class="controls">
+                <div class="search-box">
+                    <input type="text" id="collectionSearch" placeholder="Search collection..." oninput="renderCollection()">
+                </div>
+                <select class="filter-select" id="collectionLangFilter" onchange="renderCollection()">
+                    <option value="">All Languages</option>
+                    <option value="en">English</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                </select>
+            </div>
+            <div class="collection-sort">
+                Sort by:
+                <select id="collectionSort" onchange="renderCollection()">
+                    <option value="dex">Pokédex Number</option>
+                    <option value="set-exp">Expansion & Number</option>
+                    <option value="name">Name A-Z</option>
+                    <option value="rarity">Rarity</option>
+                    <option value="date">Date Added</option>
+                </select>
+            </div>
+            <div id="collectionContent"></div>
+        </div>
+    </main>
+
+    <script>
+        const APIS = {
+            en: {
+                name: 'English',
+                sets: () => fetchJSON(`https://api.pokemontcg.io/v2/sets?pageSize=250&orderBy=-releaseDate`),
+                cards: async (setId, page, ps) => {
+                    let allData = [];
+                    let p = 1;
+                    const batchSize = 250;
+                    while (true) {
+                        const res = await fetchJSON(`https://api.pokemontcg.io/v2/cards?q=set.id:${setId}&page=${p}&pageSize=${batchSize}&orderBy=number`);
+                        const cards = res.data || res || [];
+                        allData = allData.concat(cards);
+                        if (cards.length < batchSize) break;
+                        p++;
+                    }
+                    return { data: allData, totalCount: allData.length };
+                },
+                setLogo: (s) => s.images?.logo,
+                setSymbol: (s) => s.images?.symbol,
+                cardImage: (c) => c.image,
+                cardImageLarge: (c) => c.imageLarge,
+                setMap: (s) => ({ id: s.id, name: s.name, total: s.total, series: s.series, releaseDate: s.releaseDate }),
+                cardMap: (c) => ({
+                    id: c.id, name: c.name, number: c.number, rarity: c.rarity,
+                    set: { id: c.set.id, name: c.set.name },
+                    hp: c.hp, types: c.types, dexId: c.nationalPokedexNumbers?.[0],
+                    image: c.images?.small, imageLarge: c.images?.large,
+                    stage: c.stage, subtype: c.subtypes?.[0]
+                }),
+                mapCardId: (tcgSetId, num) => null,
+                hasBuiltInImages: true
+            },
+            ja: {
+                name: 'Japanese',
+                sets: () => fetchJSON(`https://api.tcgdex.net/v2/ja/sets?pagination:itemsPerPage=500`),
+                cards: (setId, page, ps) => fetchJSON(`https://api.tcgdex.net/v2/ja/cards?set=${setId}&pagination:itemsPerPage=500`),
+                setLogo: (s) => {
+                    if (s.logo) return s.logo + '.png';
+                    const enId = JP_EN_SET_MAP[s.id] || s.id;
+                    return `https://images.pokemontcg.io/${enId}/logo.png`;
+                },
+                setSymbol: (s) => {
+                    if (s.symbol) return s.symbol + '.png';
+                    const enId = JP_EN_SET_MAP[s.id] || s.id;
+                    return `https://images.pokemontcg.io/${enId}/symbol.png`;
+                },
+                cardImage: (c, set) => {
+                    if (c.image) return c.image + '/high.webp';
+                    const serie = getTcgdexSeries(c.set?.id || set?.id || '');
+                    const setId = c.set?.id || set?.id || '';
+                    const num = c.localId || c.id.split('-').pop();
+                    return `https://assets.tcgdex.net/ja/${serie}/${setId}/${num}/high.webp`;
+                },
+                cardImageLarge: (c) => c.image ? c.image + '/high.webp' : null,
+                setMap: (s) => ({
+                    id: s.id, name: s.name, total: s.cardCount?.total,
+                    series: s.serie?.name || getJpSeriesName(s.id),
+                    releaseDate: s.releaseDate
+                }),
+                cardMap: (c, set) => ({
+                    id: c.id, name: c.name, number: c.localId, rarity: c.rarity || '',
+                    set: c.set ? { id: c.set.id, name: c.set.name } : set ? { id: set.id, name: set.name } : null,
+                    hp: c.hp || null, types: c.types || [], dexId: c.dexId?.[0] || null,
+                    image: c.image, stage: c.stage || '', subtype: c.subtype || ''
+                }),
+                mapCardId: (tcgSetId, num) => null,
+                hasBuiltInImages: false
+            },
+            ko: {
+                name: 'Korean',
+                sets: () => fetchJSON(`https://api.tcgdex.net/v2/ko/sets?pagination:itemsPerPage=500`),
+                cards: async (setId, page, ps) => {
+                    const enId = KR_EN_SET_MAP[setId] || setId;
+                    let allData = [];
+                    let p = 1;
+                    const batchSize = 250;
+                    while (true) {
+                        const res = await fetchJSON(`https://api.pokemontcg.io/v2/cards?q=set.id:${enId}&page=${p}&pageSize=${batchSize}&orderBy=number`);
+                        const cards = res.data || res || [];
+                        allData = allData.concat(cards);
+                        if (cards.length < batchSize) break;
+                        p++;
+                    }
+                    return { data: allData, totalCount: allData.length };
+                },
+                setLogo: (s) => {
+                    const enId = KR_EN_SET_MAP[s.id] || s.id;
+                    return `https://images.pokemontcg.io/${enId}/logo.png`;
+                },
+                setSymbol: (s) => {
+                    const enId = KR_EN_SET_MAP[s.id] || s.id;
+                    return `https://images.pokemontcg.io/${enId}/symbol.png`;
+                },
+                cardImage: (c) => c.images?.small || c.image,
+                cardImageLarge: (c) => c.images?.large || c.image,
+                setMap: (s) => ({ id: s.id, name: s.name, total: s.cardCount?.total, series: getKrSeries(s.id) }),
+                cardMap: (c, set) => ({
+                    id: c.id, name: c.name, number: c.number || c.localId, rarity: c.rarity || '',
+                    set: set ? { id: set.id, name: set.name } : { id: c.set?.id || '', name: c.set?.name || '' },
+                    hp: c.hp || null, types: c.types || [], dexId: c.nationalPokedexNumbers?.[0] || c.dexId?.[0] || null,
+                    image: c.images?.small || c.image, stage: c.stage || '', subtype: c.subtypes?.[0] || c.subtype || ''
+                }),
+                mapCardId: (tcgSetId, num) => null,
+                hasBuiltInImages: false
+            }
+        };
+
+        const JP_EN_SET_MAP = {
+            'PMCG1': 'base1', 'PMCG2': 'base2', 'PMCG3': 'base3', 'PMCG4': 'base5',
+            'PMCG5': 'gym1', 'PMCG6': 'gym2', 'neo1': 'neo1', 'neo2': 'neo2',
+            'neo3': 'neo3', 'neo4': 'neo4', 'ex1': 'ex1', 'ex2': 'ex2',
+            'ex3': 'ex3', 'ex4': 'ex4', 'ex5': 'ex5', 'ex6': 'ex6',
+            'sm1': 'sm1', 'sm1a': 'sm1', 'sm2': 'sm2', 'sm3': 'sm3', 'sm3a': 'sm3',
+            'sm4': 'sm4', 'sm4a': 'sm4', 'sm5': 'sm5', 'sm5a': 'sm5',
+            'sm6': 'sm6', 'sm7': 'sm7', 'sm7a': 'sm7', 'sm8': 'sm8', 'sm8a': 'sm8',
+            'sm9': 'sm9', 'sm10': 'sm10', 'sm11': 'sm11', 'sm12': 'sm12',
+            'xy1': 'xy1', 'xy2': 'xy2', 'xy3': 'xy3', 'xy4': 'xy4',
+            'xy5': 'xy5', 'xy6': 'xy6', 'xy7': 'xy7', 'xy8': 'xy8',
+            'xy9': 'xy9', 'xy10': 'xy10', 'xy11': 'xy11', 'xy12': 'xy12',
+            'SWSH1': 'swsh1', 'SWSH1a': 'swsh1', 'SWSH2': 'swsh2', 'SWSH3': 'swsh3',
+            'SWSH3a': 'swsh3', 'SWSH4': 'swsh4', 'SWSH4a': 'swsh4',
+            'SWSH5': 'swsh5', 'SWSH5a': 'swsh5', 'SWSH6': 'swsh6', 'SWSH6a': 'swsh6',
+            'SWSH7': 'swsh7', 'SWSH7a': 'swsh7', 'SWSH8': 'swsh8', 'SWSH8a': 'swsh8',
+            'SWSH9': 'swsh9', 'SWSH9a': 'swsh9', 'SWSH10': 'swsh10', 'SWSH10a': 'swsh10',
+            'SWSH11': 'swsh11', 'SWSH11a': 'swsh11', 'SWSH12': 'swsh12', 'SWSH12a': 'swsh12',
+            'SV1': 'sv1', 'SV1a': 'sv1', 'SV1S': 'sv1', 'SV1V': 'sv1',
+            'SV2': 'sv2', 'SV2a': 'sv2', 'SV2D': 'sv2', 'SV2P': 'sv2',
+            'SV3': 'sv3', 'SV3a': 'sv3', 'SV3b': 'sv3',
+            'SV4': 'sv4', 'SV4a': 'sv4', 'SV4K': 'sv4', 'SV4M': 'sv4',
+            'SV5': 'sv5', 'SV5a': 'sv5', 'SV5K': 'sv5', 'SV5M': 'sv5',
+            'SV6': 'sv6', 'SV6a': 'sv6', 'SV6b': 'sv6',
+            'SV7': 'sv7', 'SV7a': 'sv7', 'SV7b': 'sv7',
+            'SV8': 'sv8', 'SV8a': 'sv8',
+            'SV9': 'sv9', 'SV9a': 'sv9',
+            'SV10': 'sv10', 'SV10a': 'sv10',
+            'SV11': 'sv11', 'SV11a': 'sv11',
+            'SVLS': 'sv6', 'SVLN': 'sv6', 'SVK': 'sv4',
+            'M1S': 'sv1', 'M3': 'sv3', 'M11': 'sv11',
+            'S1H': 'swsh1', 'S1W': 'swsh1', 'S1a': 'swsh1',
+            'S2': 'swsh2', 'S3': 'swsh3', 'S3a': 'swsh3',
+            'S4': 'swsh4', 'S4a': 'swsh4',
+            'S5I': 'swsh5', 'S5R': 'swsh5', 'S5a': 'swsh5',
+            'S6H': 'swsh6', 'S6K': 'swsh6', 'S6a': 'swsh6',
+            'S7D': 'swsh7', 'S7R': 'swsh7',
+            'S8': 'swsh8', 'S8a': 'swsh8', 'S8b': 'swsh8',
+            'S9': 'swsh9', 'S9a': 'swsh9',
+            'S10D': 'swsh10', 'S10a': 'swsh10', 'S10b': 'swsh10', 'S10P': 'swsh10',
+            'S11': 'swsh11', 'S11a': 'swsh11',
+            'S12': 'swsh12', 'S12a': 'swsh12',
+        };
+
+        const KR_EN_SET_MAP = {
+            'SM1M': 'sm1', 'SM1S': 'sm1', 'SM1+': 'sm1',
+            'SM2K': 'sm2', 'SM2L': 'sm2', 'sm2+': 'sm2',
+            'SM3H': 'sm3', 'SM3N': 'sm3', 'SM3+': 'sm3',
+            'SM4A': 'sm4', 'SM4S': 'sm4', 'SM4+': 'sm4',
+            'SM5S': 'sm5', 'SM5M': 'sm5', 'SM5+': 'sm5',
+            'SM6': 'sm6', 'SM6a': 'sm6', 'SM6b': 'sm6',
+            'SM7': 'sm7', 'SM7a': 'sm7', 'SM7b': 'sm7',
+            'SM8': 'sm8', 'SM8a': 'sm8', 'SM8b': 'sm8',
+            'SM9': 'sm9', 'SM9a': 'sm9', 'SM9b': 'sm9',
+            'SM10': 'sm10', 'sn10a': 'sm10', 'SM10b': 'sm10',
+            'sn11': 'sm11', 'SM11a': 'sm11', 'SM11b': 'sm11',
+            'SM12': 'sm12', 'SM12a': 'sm12',
+            'S1H': 'swsh1', 'S1W': 'swsh1', 'S1a': 'swsh1',
+            'S2': 'swsh2', 'S3': 'swsh3', 'S3a': 'swsh3',
+            'S4': 'swsh4', 'S4a': 'swsh4',
+            'S5I': 'swsh5', 'S5R': 'swsh5', 'S5a': 'swsh5',
+            'S6H': 'swsh6', 'S6K': 'swsh6', 'S6a': 'swsh6',
+            'S7D': 'swsh7', 'S7R': 'swsh7',
+            'S8': 'swsh8', 'S8a': 'swsh8', 'S8b': 'swsh8',
+            'S9': 'swsh9', 'S9a': 'swsh9',
+            'S10D': 'swsh10', 'S10a': 'swsh10', 'S10b': 'swsh10', 'S10P': 'swsh10',
+            'S11': 'swsh11', 'S11a': 'swsh11',
+            'S12': 'swsh12', 'S12a': 'swsh12',
+            'sv1a': 'sv1', 'SV1a': 'sv1', 'SV1S': 'sv1', 'SV1V': 'sv1',
+            'sv2a': 'sv2', 'SV2a': 'sv2', 'SV2D': 'sv2', 'SV2P': 'sv2',
+            'SV3': 'sv3', 'SV3a': 'sv3',
+            'SV4a': 'sv4', 'SV4K': 'sv4', 'SV4M': 'sv4',
+            'SV5a': 'sv5', 'SV5K': 'sv5', 'SV5M': 'sv5',
+            'SV6': 'sv6', 'SV6a': 'sv6',
+            'SV7': 'sv7', 'SV7a': 'sv7',
+            'SV8': 'sv8', 'SV8a': 'sv8',
+            'SV9': 'sv9', 'SV9a': 'sv9',
+            'SV10': 'sv10',
+            'SV11B': 'sv11', 'SV11W': 'sv11',
+            'SVLS': 'sv6', 'SVLN': 'sv6', 'SVK': 'sv4',
+            'M1S': 'sv1', 'M3': 'sv3',
+            'CS1a': 'sv1', 'CS1b': 'sv1', 'CS1.5': 'sv1',
+            'CS2a': 'sv2', 'CS2b': 'sv2', 'CS2.5': 'sv2', 'CS3.5': 'sv3',
+            'SMP2': 'smp', 'S10P': 'smp',
+            'XY1a': 'xy1', 'XY1b': 'xy1', 'XY2': 'xy2', 'XY3': 'xy3',
+            'XY4': 'xy4', 'XY5a': 'xy5', 'XY6': 'xy6', 'XY7': 'xy7',
+            'XY8a': 'xy8', 'XY8b': 'xy8', 'XY9': 'xy9',
+            'XY10': 'xy10', 'XY11a': 'xy11',
+            'CP1': 'xy2', 'CP2': 'xy7', 'CP3': 'xy9', 'CP4': 'xy11', 'CP5': 'xy11', 'CP6': 'xy12',
+        };
+
+        function getTcgdexSeries(setId) {
+            const s = setId.toUpperCase();
+            if (s.startsWith('SV') || s.startsWith('M')) return 'SV';
+            if (s.startsWith('S') || s.startsWith('SM')) return 'SWSH';
+            if (s.startsWith('XY') || s.startsWith('CP')) return 'XY';
+            if (s.startsWith('ADV') || s.startsWith('PCG')) return 'ADV';
+            if (s.startsWith('E') || s.startsWith('VS')) return 'E';
+            if (s.startsWith('NEO')) return 'neo';
+            if (s.startsWith('PMCG')) return 'base';
+            if (s.startsWith('L')) return 'L';
+            return setId.substring(0, 2);
+        }
+
+        function getJpSeriesName(setId) {
+            const s = setId.toUpperCase();
+            if (s.startsWith('SV') || s.startsWith('M')) return 'Scarlet & Violet';
+            if (s.startsWith('S')) return 'Sword & Shield';
+            if (s.startsWith('SM')) return 'Sun & Moon';
+            if (s.startsWith('XY') || s.startsWith('CP')) return 'XY';
+            if (s.startsWith('ADV') || s.startsWith('PCG')) return 'ADV';
+            if (s.startsWith('E') || s.startsWith('VS')) return 'EX';
+            if (s.startsWith('NEO')) return 'Neo';
+            if (s.startsWith('PMCG')) return 'Base';
+            if (s.startsWith('L')) return 'LP';
+            return setId.substring(0, 2).toUpperCase();
+        }
+
+        function getKrSeries(setId) {
+            const s = setId.toUpperCase();
+            if (s.startsWith('SV') || s.startsWith('CS') || s.startsWith('M')) return 'Scarlet & Violet';
+            if (s.startsWith('S')) return 'Sword & Shield';
+            if (s.startsWith('XY') || s.startsWith('CP')) return 'XY';
+            if (s.startsWith('SM')) return 'Sun & Moon';
+            return setId.substring(0, 2).toUpperCase();
+        }
+
+        function getEnSetId(setId) {
+            return KR_EN_SET_MAP[setId] || JP_EN_SET_MAP[setId] || setId;
+        }
+
+        let currentLang = localStorage.getItem('tcgLang') || 'en';
+        let allSets = [];
+        let currentSet = null;
+        let allCards = [];
+        let totalCardCount = 0;
+        let currentPage = 1;
+        const perPage = 48;
+        let collection = JSON.parse(localStorage.getItem('pokemonCollection') || '{}');
+        let pokemonDexCache = {};
+
+        const langNames = { en: 'English', ja: 'Japanese', ko: 'Korean' };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setLangBtns(currentLang);
+            loadSets();
+            loadDex();
+        });
+
+        function setLangBtns(lang) {
+            document.querySelectorAll('.lang-btn').forEach(b => {
+                b.classList.toggle('active', b.textContent.trim() === lang.toUpperCase());
+            });
+        }
+
+        async function loadDex() {
+            try {
+                const r = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1025');
+                const d = await r.json();
+                d.results.forEach((p, i) => { pokemonDexCache[p.name] = i + 1; });
+            } catch (e) {}
+        }
+
+        function getDexId(card) {
+            if (card?.dexId) return card.dexId;
+            if (card?.name) {
+                const n = card.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (pokemonDexCache[n]) return pokemonDexCache[n];
+            }
+            return null;
+        }
+
+        async function fetchJSON(url) {
+            const r = await fetch(url);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const d = await r.json();
+            if (currentLang === 'en') return d.data || [];
+            return d || [];
+        }
+
+        function api() { return APIS[currentLang]; }
+
+        function showView(view) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('btn-expansions').classList.remove('active');
+            document.getElementById('btn-collection').classList.remove('active');
+            if (view === 'expansions') {
+                document.getElementById('view-expansions').classList.add('active');
+                document.getElementById('btn-expansions').classList.add('active');
+            } else if (view === 'cards') {
+                document.getElementById('view-cards').classList.add('active');
+            } else if (view === 'collection') {
+                document.getElementById('view-collection').classList.add('active');
+                document.getElementById('btn-collection').classList.add('active');
+                renderCollection();
+            }
+        }
+
+        function switchLang(lang) {
+            currentLang = lang;
+            localStorage.setItem('tcgLang', lang);
+            setLangBtns(lang);
+            allSets = [];
+            currentSet = null;
+            allCards = [];
+            currentPage = 1;
+            showView('expansions');
+            loadSets();
+        }
+
+        async function loadSets() {
+            document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading expansions...</span></div>';
+            try {
+                const a = api();
+                const data = await a.sets();
+                allSets = data.map(s => a.setMap(s));
+                populateSeriesFilter();
+                renderExpansions(allSets);
+            } catch (e) {
+                document.getElementById('expansionsContent').innerHTML = `<div class="error-msg">Error loading expansions. ${e.message}</div>`;
+            }
+        }
+
+        function populateSeriesFilter() {
+            const series = [...new Set(allSets.map(s => s.series).filter(Boolean))].sort();
+            const sel = document.getElementById('seriesFilter');
+            sel.innerHTML = '<option value="">All Series</option>';
+            series.forEach(s => { sel.innerHTML += `<option value="${s}">${s}</option>`; });
+        }
+
+        function getOwnedCount(setId) { return Object.keys(collection).filter(id => collection[id]?.set?.id === setId).length; }
+
+        function filterExpansions() {
+            const search = document.getElementById('expansionSearch').value.toLowerCase();
+            const series = document.getElementById('seriesFilter').value;
+            const filtered = allSets.filter(s => {
+                const m1 = s.name.toLowerCase().includes(search) || (s.series || '').toLowerCase().includes(search);
+                const m2 = !series || s.series === series;
+                return m1 && m2;
+            });
+            renderExpansions(filtered);
+        }
+
+        function renderExpansions(sets) {
+            const c = document.getElementById('expansionsContent');
+            if (!sets.length) { c.innerHTML = '<div class="empty-state"><h3>No expansions found</h3></div>'; return; }
+            const a = api();
+            c.innerHTML = `<div class="expansions-grid">${sets.map(set => {
+                const owned = getOwnedCount(set.id);
+                const logo = a.setLogo(allSets.find(s => s.id === set.id));
+                return `<div class="expansion-card" onclick="openSet('${set.id.replace(/'/g, "\\'")}')">
+                    <div class="expansion-logo-wrap">
+                        ${logo
+                            ? `<img src="${logo}" alt="${set.name}" onerror="this.parentElement.innerHTML='<span class=\\'no-logo\\'>${set.id}</span>'">`
+                            : `<span class="no-logo">${set.id}</span>`}
+                    </div>
+                    <div class="expansion-info">
+                        <div class="expansion-name">${set.name}</div>
+                        <div class="expansion-meta">
+                            <span>${set.total || '?'} cards</span>
+                            ${owned > 0 ? `<span class="expansion-badge">${owned} owned</span>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+            }).join('')}</div>`;
+        }
+
+        async function openSet(setId) {
+            const setObj = allSets.find(s => s.id === setId);
+            if (!setObj) return;
+            document.getElementById('cardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading cards...</span></div>';
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-cards').classList.add('active');
+            document.getElementById('btn-expansions').classList.remove('active');
+            document.getElementById('btn-collection').classList.remove('active');
+            document.getElementById('cardsViewTitle').textContent = setObj.name;
+            document.getElementById('cardSearch').value = '';
+            document.getElementById('rarityFilter').innerHTML = '<option value="">All Rarities</option>';
+            currentSet = setObj;
+
+            const a = api();
+            try {
+                const res = await a.cards(setId, 1, perPage);
+                const cards = res.data || res;
+                allCards = (cards || []).map(c => a.cardMap(c, setObj));
+                totalCardCount = res.totalCount || allCards.length;
+
+                populateRarityFilter();
+                renderCards();
+                updateStats();
+                document.getElementById('prevPage').closest('.pagination').style.display = 'none';
+            } catch (e) {
+                document.getElementById('cardsContent').innerHTML = `<div class="error-msg">Error loading cards. ${e.message}</div>`;
+            }
+        }
+
+        function updatePageInfo() {
+            if (currentLang === 'en') {
+                const totalPages = Math.max(1, Math.ceil(totalCardCount / perPage));
+                document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+                document.getElementById('prevPage').disabled = currentPage <= 1;
+                document.getElementById('nextPage').disabled = currentPage >= totalPages;
+            } else {
+                const loaded = currentPage * perPage;
+                const total = currentSet?.total || loaded;
+                const totalPages = Math.max(1, Math.ceil(total / perPage));
+                const hasNext = loaded < total;
+                document.getElementById('pageInfo').textContent = `Page ${currentPage}`;
+                document.getElementById('prevPage').disabled = currentPage <= 1;
+                document.getElementById('nextPage').disabled = !hasNext;
+            }
+        }
+
+        function populateRarityFilter() {
+            const rarities = [...new Set(allCards.map(c => c.rarity).filter(Boolean))].sort();
+            const sel = document.getElementById('rarityFilter');
+            sel.innerHTML = '<option value="">All Rarities</option>';
+            rarities.forEach(r => { sel.innerHTML += `<option value="${r}">${r}</option>`; });
+        }
+
+        function getCardImageSrc(card, set) {
+            const a = api();
+            const primary = a.cardImage(card, set);
+            if (!primary) return null;
+            return primary;
+        }
+
+        function getCardFallbackSrc(card, set) {
+            const enSetId = getEnSetId(set?.id || '').toLowerCase();
+            const num = (card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1';
+            return `https://images.pokemontcg.io/en/${enSetId}/${num}.png`;
+        }
+
+        function renderCards() {
+            const c = document.getElementById('cardsContent');
+            if (!allCards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
+            const a = api();
+
+            c.innerHTML = `<div class="cards-grid">${allCards.map(card => {
+                const owned = !!collection[card.id];
+                const img = getCardImageSrc(card, currentSet);
+                const fallback = getCardFallbackSrc(card, currentSet);
+                return `<div class="card-tcg ${owned ? 'owned' : ''}">
+                    <div class="owned-badge"></div>
+                    <div class="card-img-wrap">
+                        ${img
+                            ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">`
+                            : `<span class="no-img">No image</span>`}
+                    </div>
+                    <div class="card-details">
+                        <div class="card-name">${card.name}</div>
+                        <div class="card-meta">${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
+                    </div>
+                    <div class="card-actions">
+                        ${owned
+                            ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>`
+                            : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                    </div>
+                </div>`;
+            }).join('')}</div>`;
+        }
+
+        async function fetchCardsPage(page) {
+            const a = api();
+            const cards = await a.cards(currentSet.id, page, perPage);
+            return (cards || []).map(c => a.cardMap(c, currentSet));
+        }
+
+        function filterCards() {
+            const search = document.getElementById('cardSearch').value.toLowerCase();
+            const rarity = document.getElementById('rarityFilter').value;
+            const filtered = allCards.filter(c => {
+                const m1 = !search || c.name.toLowerCase().includes(search);
+                const m2 = !rarity || c.rarity === rarity;
+                return m1 && m2;
+            });
+            renderFilteredCards(filtered);
+            updateStatsFiltered(filtered);
+        }
+
+        function renderFilteredCards(cards) {
+            const c = document.getElementById('cardsContent');
+            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
+            c.innerHTML = `<div class="cards-grid">${cards.map(card => {
+                const owned = !!collection[card.id];
+                const img = getCardImageSrc(card, currentSet);
+                const fallback = getCardFallbackSrc(card, currentSet);
+                return `<div class="card-tcg ${owned ? 'owned' : ''}">
+                    <div class="owned-badge"></div>
+                    <div class="card-img-wrap">
+                        ${img
+                            ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">`
+                            : `<span class="no-img">No image</span>`}
+                    </div>
+                    <div class="card-details">
+                        <div class="card-name">${card.name}</div>
+                        <div class="card-meta">${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
+                    </div>
+                    <div class="card-actions">
+                        ${owned
+                            ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>`
+                            : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                    </div>
+                </div>`;
+            }).join('')}</div>`;
+        }
+
+        function updateStatsFiltered(cards) {
+            const total = cards.length;
+            const owned = cards.filter(c => collection[c.id]).length;
+            document.getElementById('totalCards').textContent = total;
+            document.getElementById('ownedCards').textContent = owned;
+            document.getElementById('progressPercent').textContent = total ? Math.round(owned / total * 100) + '%' : '0%';
+        }
+
+        async function changePage(dir) {
+            currentPage += dir;
+            document.getElementById('cardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading...</span></div>';
+            try {
+                const cards = await fetchCardsPage(currentPage);
+                allCards = cards;
+
+                if (currentLang === 'en' && cards.totalCount) {
+                    totalCardCount = cards.totalCount;
+                }
+
+                renderCards();
+                updateStats();
+                updatePageInfo();
+                window.scrollTo(0, 0);
+            } catch (e) {
+                document.getElementById('cardsContent').innerHTML = `<div class="error-msg">Error. ${e.message}</div>`;
+            }
+        }
+
+        function updateStats() {
+            const total = allCards.length;
+            const owned = allCards.filter(c => collection[c.id]).length;
+            document.getElementById('totalCards').textContent = total;
+            document.getElementById('ownedCards').textContent = owned;
+            document.getElementById('progressPercent').textContent = total ? Math.round(owned / total * 100) + '%' : '0%';
+        }
+
+        function toggleCard(cardId) {
+            if (collection[cardId]) {
+                delete collection[cardId];
+            } else {
+                const brief = allCards.find(c => c.id === cardId);
+                const a = api();
+                collection[cardId] = {
+                    ...brief, quantity: 1, dateAdded: new Date().toISOString(), lang: currentLang
+                };
+            }
+            localStorage.setItem('pokemonCollection', JSON.stringify(collection));
+            const search = document.getElementById('cardSearch').value.toLowerCase();
+            const rarity = document.getElementById('rarityFilter').value;
+            if (search || rarity) {
+                filterCards();
+            } else {
+                renderCards();
+            }
+            updateStats();
+        }
+
+        function renderCollection() {
+            const c = document.getElementById('collectionContent');
+            let cards = Object.values(collection);
+            if (!cards.length) {
+                c.innerHTML = '<div class="empty-state"><h3>Your collection is empty</h3><p>Start by adding cards from the Expansions tab!</p></div>';
+                updateColStats([]); return;
+            }
+            const search = document.getElementById('collectionSearch')?.value.toLowerCase() || '';
+            const langF = document.getElementById('collectionLangFilter')?.value || '';
+            const sort = document.getElementById('collectionSort')?.value || 'dex';
+            if (search) cards = cards.filter(x => x.name.toLowerCase().includes(search) || x.set?.name?.toLowerCase().includes(search));
+            if (langF) cards = cards.filter(x => x.lang === langF);
+            cards = sortCards(cards, sort);
+            updateColStats(cards);
+
+            c.innerHTML = `<div class="collection-list">${cards.map(card => {
+                const dex = getDexId(card);
+                const dexStr = dex ? '#' + String(dex).padStart(3, '0') : '???';
+                const langLabel = card.lang ? `[${langNames[card.lang] || card.lang}]` : '';
+                let img = card.image;
+                if (img && !img.endsWith('.png') && !img.endsWith('.webp') && !img.endsWith('.jpg')) {
+                    img = img + '/high.webp';
+                }
+                const fallbackImg = card.lang !== 'en' ? `https://images.pokemontcg.io/en/${(getEnSetId(card.set?.id || '')).toLowerCase()}/${(card.number || card.localId || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png` : '';
+                return `<div class="collection-item">
+                    <div class="collection-dex-num">${dexStr}</div>
+                    ${img
+                        ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.onerror=null; this.src='${fallbackImg}'; this.onerror=function(){this.style.display='none';};">`
+                        : fallbackImg
+                        ? `<img class="collection-thumb" src="${fallbackImg}" alt="${card.name}" onerror="this.style.display='none';">`
+                        : `<div class="collection-thumb" style="display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--text-muted);">No img</div>`}
+                    <div class="collection-info">
+                        <h4>${card.name} ${langLabel}</h4>
+                        <p>${card.set?.name || ''} #${card.number || ''} ${card.rarity || ''}</p>
+                    </div>
+                    <div class="collection-qty">
+                        <button class="qty-btn" onclick="changeQty('${card.id}',-1)">−</button>
+                        <span class="qty-display">${card.quantity || 1}</span>
+                        <button class="qty-btn" onclick="changeQty('${card.id}',1)">+</button>
+                    </div>
+                    <button class="del-btn" onclick="removeCard('${card.id}')">Remove</button>
+                </div>`;
+            }).join('')}</div>`;
+        }
+
+        function sortCards(cards, by) {
+            return [...cards].sort((a, b) => {
+                if (by === 'dex') {
+                    const da = getDexId(a) || 9999, db = getDexId(b) || 9999;
+                    return da !== db ? da - db : (a.number || '').localeCompare(b.number || '');
+                }
+                if (by === 'set-exp') {
+                    if (a.set?.id !== b.set?.id) return (a.set?.id || '').localeCompare(b.set?.id || '');
+                    return parseInt(a.number || 0) - parseInt(b.number || 0);
+                }
+                if (by === 'name') return a.name.localeCompare(b.name);
+                if (by === 'rarity') {
+                    const o = ['Common','Uncommon','Rare','Rare Holo','Rare Holo EX','Rare Ultra','Rare Secret','Rare Shiny','Illustration Rare','Special Illustration Rare','Hyper Rare'];
+                    return (o.indexOf(a.rarity) || 99) - (o.indexOf(b.rarity) || 99);
+                }
+                if (by === 'date') return new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0);
+                return 0;
+            });
+        }
+
+        function updateColStats(cards) {
+            document.getElementById('colUnique').textContent = cards.length;
+            document.getElementById('colTotal').textContent = cards.reduce((s, c) => s + (c.quantity || 1), 0);
+            document.getElementById('colExpansions').textContent = new Set(cards.map(c => c.set?.id)).size;
+            document.getElementById('colSpecies').textContent = new Set(cards.map(c => getDexId(c)).filter(Boolean)).size;
+        }
+
+        function changeQty(id, d) {
+            if (collection[id]) { collection[id].quantity = Math.max(1, (collection[id].quantity || 1) + d); localStorage.setItem('pokemonCollection', JSON.stringify(collection)); renderCollection(); }
+        }
+
+        function removeCard(id) { delete collection[id]; localStorage.setItem('pokemonCollection', JSON.stringify(collection)); renderCollection(); }
+    </script>
+</body>
+</html>
