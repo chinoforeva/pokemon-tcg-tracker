@@ -116,10 +116,10 @@
         .price-btn:hover { background: rgba(0,212,170,0.2); transform: scale(1.1); }
         .price-btn.loading { color: var(--text-muted); border-color: var(--border); }
         .price-dropdown {
-            display: none; position: absolute; top: 42px; left: 8px; z-index: 10;
-            background: rgba(18,18,42,0.95); backdrop-filter: blur(12px);
+            display: none; position: fixed; z-index: 9999;
+            background: rgba(18,18,42,0.98); backdrop-filter: blur(12px);
             border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.8rem;
-            min-width: 180px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            min-width: 180px; box-shadow: 0 8px 30px rgba(0,0,0,0.6);
         }
         .price-dropdown.show { display: block; }
         .price-dropdown .price-row { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; font-size: 0.72rem; }
@@ -375,16 +375,27 @@
             if (!dropdown) return;
             if (dropdown.classList.contains('show')) {
                 dropdown.classList.remove('show');
+                dropdown.style.transform = 'none';
                 openPriceDropdown = null;
                 return;
             }
+            const btn = dropdown.parentElement.querySelector('.price-btn');
+            const rect = btn.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            if (spaceBelow < 200) {
+                dropdown.style.top = (rect.top - 10) + 'px';
+                dropdown.style.transform = 'translateY(-100%)';
+            } else {
+                dropdown.style.top = (rect.bottom + 6) + 'px';
+                dropdown.style.transform = 'none';
+            }
+            dropdown.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
             dropdown.classList.add('show');
             openPriceDropdown = { id: cardId };
             if (pricingCache[cardId]) {
                 dropdown.innerHTML = buildPriceHTML(pricingCache[cardId]);
                 return;
             }
-            const btn = dropdown.parentElement.querySelector('.price-btn');
             btn.classList.add('loading');
             btn.textContent = '...';
             try {
