@@ -217,7 +217,7 @@
         <div id="view-cards" class="view">
             <button class="back-link" onclick="showView('expansions')">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 8H3M8 3l-5 5 5 5"/></svg>
-                Back to Expansiones
+                Volver a Expansiones
             </button>
             <div class="section-header">
                 <h2 class="section-title" id="cardsViewTitle"></h2>
@@ -271,19 +271,64 @@
         </div>
     </main>
     <script>
+        const API = 'https://api.tcgdex.net/v2/en';
+        const ASSETS = 'https://assets.tcgdex.net/en';
+
         async function fetchJSON(url) {
             const r = await fetch(url);
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return r.json();
         }
 
+        function cardImageUrl(card, quality = 'low', ext = 'webp') {
+            const s = card.set;
+            return `${ASSETS}/${s.serie || s.id.split(/(?=\d)/)[0]}/${s.id}/${card.localId || card.number}.${ext}`;
+        }
+
+        function cardImageFullUrl(card, quality = 'low', ext = 'webp') {
+            return `${ASSETS}/${card.imageBase || ''}/${quality}.${ext}`;
+        }
+
+        function getSetSerie(setId) {
+            const m = setId.match(/^([a-z]+?)(?:\d|$)/i);
+            return m ? m[1].toLowerCase() : setId.split(/(?=\d)/)[0];
+        }
+
+        function getMarketPrice(card) {
+            const tcg = card.pricing?.tcgplayer;
+            if (tcg) {
+                const variants = ['holofoil', '1st-edition-holofoil', 'unlimited-holofoil', 'normal', '1st-edition', 'unlimited', 'reverse-holofoil'];
+                for (const v of variants) {
+                    if (tcg[v]?.marketPrice) return parseFloat(tcg[v].marketPrice);
+                }
+            }
+            const cm = card.pricing?.cardmarket;
+            if (cm?.trend) return parseFloat(cm.trend);
+            return null;
+        }
+
+        function buildCardBrief(raw) {
+            return {
+                id: raw.id, name: raw.name, number: raw.localId, rarity: raw.rarity,
+                set: { id: raw.set?.id || '', name: raw.set?.name || '', serie: getSetSerie(raw.set?.id || '') },
+                dexId: raw.dexId?.[0] || null,
+                image: raw.image ? `${raw.image}/low.webp` : null,
+                imageLarge: raw.image ? `${raw.image}/high.webp` : null,
+                hp: raw.hp || null, types: raw.types || [],
+                stage: raw.stage || null, subtype: raw.category || null,
+                marketPrice: getMarketPrice(raw),
+                pricing: raw.pricing || null
+            };
+        }
+
         async function loadSets() {
             document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Cargando expansiones...</span></div>';
             try {
-                const data = await fetchJSON('https://api.pokemontcg.io/v2/sets?pageSize=250&orderBy=-releaseDate');
-                allSets = (data.data || []).map(s => ({
-                    id: s.id, name: s.name, total: s.total, series: s.series,
-                    releaseDate: s.releaseDate, logo: s.images?.logo, symbol: s.images?.symbol
+                const rawSets = await fetchJSON(`${API}/sets`);
+                allSets = rawSets.map(s => ({
+                    id: s.id, name: s.name, total: s.cardCount?.total || 0, official: s.cardCount?.official || 0,
+                    series: getSetSerie(s.id), logo: s.logo ? `${s.logo}.webp` : null,
+                    symbol: s.symbol ? `${s.symbol}.webp` : null
                 }));
                 populateSeriesFilter();
                 renderExpansions(allSets);
@@ -343,45 +388,11 @@
             document.getElementById('btn-collection').classList.remove('active');
             document.getElementById('cardsViewTitle').textContent = setObj.name;
             document.getElementById('cardSearch').value = '';
-            document.getElementById('rarityFilter').innerHTML = '<option value="">All Rarities</option>';
+            document.getElementById('rarityFilter').innerHTML = '<option value="">Todas las Rarezas</option>';
             currentSet = setObj;
             try {
-                let allData = [];
-                let p = 1, totalCount = Infinity;
-                while (allData.length < totalCount) {
-                    const raw = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${setId}&page=${p}&pageSize=250&orderBy=number`);
-                    if (!raw.ok) throw new Error(`HTTP ${raw.status}`);
-                    const d = await raw.json();
-                    const cards = d.data || [];
-                    totalCount = d.totalCount || cards.length;
-                    allData = allData.concat(cards);
-                    p++;
-                }
-                allCards = allData.map(c => ({
-                    id: c.id, name: c.name, number: c.number, rarity: c.rarity,
-                    set: { id: c.set?.id || '', name: c.set?.name || '' },
-                    hp: c.hp, types: c.types, dexId: c.nationalPokedexNumbers?.[0],
-                    image: c.images?.small, imageLarge: c.images?.large,
-                    stage: c.stage, subtype: c.subtypes?.[0],
-                    marketPrice: getMarketPrice(c)
-                }));
-                const setTotal = currentSet?.total || 0;
-                allCards.forEach(card => {
-                    if (!card.rarity) {
-                        const num = parseInt(card.number, 10) || 0;
-                        const sub = card.subtype || '';
-                        if (sub === 'VMAX') card.rarity = 'Rare Holo VMAX';
-                        else if (sub === 'VSTAR') card.rarity = 'Rare Holo VSTAR';
-                        else if (sub === 'V' || sub === 'ex' || sub === 'GX') card.rarity = 'Rare Holo ' + sub;
-                        else if (num > setTotal && setTotal > 0) {
-                            const range = setTotal * 0.5, pos = num - setTotal;
-                            if (pos > range * 0.8) card.rarity = 'Hyper Rare';
-                            else if (pos > range * 0.6) card.rarity = 'Special Illustration Rare';
-                            else if (pos > range * 0.3) card.rarity = 'Illustration Rare';
-                            else card.rarity = 'Rare Secret';
-                        } else card.rarity = 'Rare';
-                    }
-                });
+                const rawCards = await fetchJSON(`${API}/cards?set=${setId}`);
+                allCards = rawCards.map(c => buildCardBrief(c));
                 totalCardCount = allCards.length;
                 populateRarityFilter();
                 currentPage = 1;
@@ -395,7 +406,7 @@
 
         function updatePageInfo() {
             const totalPages = Math.max(1, Math.ceil(totalCardCount / perPage));
-            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${totalPages}`;
             document.getElementById('prevPage').disabled = currentPage <= 1;
             document.getElementById('nextPage').disabled = currentPage >= totalPages;
             document.getElementById('prevPage').closest('.pagination').style.display = totalPages > 1 ? '' : 'none';
@@ -408,24 +419,6 @@
             rarities.forEach(r => { sel.innerHTML += `<option value="${r}">${r}</option>`; });
         }
 
-        function getMarketPrice(c) {
-            const p = c.tcgplayer?.prices;
-            if (!p) return null;
-            const variants = ['holofoil', 'normal', 'reverseHolofoil', '1stEditionHolofoil', '1stEditionNormal'];
-            for (const v of variants) {
-                if (p[v]?.market) return parseFloat(p[v].market);
-            }
-            return null;
-        }
-
-        function getCardImageSrc(card) { return card.image || null; }
-
-        function getCardFallbackSrc(card) {
-            const setId = (card.set?.id || '').toLowerCase();
-            const num = (card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1';
-            return `https://images.pokemontcg.io/${setId}/${num}.png`;
-        }
-
         function renderCards() {
             const c = document.getElementById('cardsContent');
             if (!allCards.length) { c.innerHTML = '<div class="empty-state"><h3>No se encontraron cartas</h3></div>'; return; }
@@ -433,15 +426,14 @@
             const pageCards = allCards.slice(start, start + perPage);
             c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
                 const owned = !!collection[card.id];
-                const img = getCardImageSrc(card);
-                const fallback = getCardFallbackSrc(card);
+                const img = card.image;
                 const price = card.marketPrice;
                 const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
                     ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';};">` : `<span class="no-img">Sin imagen</span>`}
+                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
@@ -467,20 +459,8 @@
             globalSearchTimeout = setTimeout(async () => {
                 document.getElementById('globalCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Buscando...</span></div>';
                 try {
-                    let all = [], page = 1;
-                    while (true) {
-                        const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(q)}*&page=${page}&pageSize=250&orderBy=number`);
-                        const d = await res.json();
-                        all = all.concat(d.data || []);
-                        if (!d.data || d.data.length < 250) break;
-                        page++;
-                    }
-                    globalSearchCards = all.map(c => ({
-                        id: c.id, name: c.name, number: c.number, rarity: c.rarity,
-                        set: { id: c.set?.id || '', name: c.set?.name || '' },
-                        image: c.images?.small,
-                        marketPrice: getMarketPrice(c)
-                    }));
+                    const rawCards = await fetchJSON(`${API}/cards?name=${encodeURIComponent(q)}`);
+                    globalSearchCards = rawCards.map(c => buildCardBrief(c));
                     renderGlobalCards(globalSearchCards);
                 } catch (e) {
                     document.getElementById('globalCardsContent').innerHTML = `<div class="error-msg">Error. ${e.message}</div>`;
@@ -493,7 +473,7 @@
             if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No se encontraron cartas</h3></div>'; return; }
             c.innerHTML = `<div class="cards-grid">${cards.map(card => {
                 const owned = !!collection[card.id];
-                const setName = card.set?.name || card.set?.id || '';
+                const setName = card.set?.name || '';
                 const setId = card.set?.id || '';
                 const price = card.marketPrice;
                 const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
@@ -501,7 +481,7 @@
                     ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/${setId.toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';};">` : `<span class="no-img">Sin imagen</span>`}
+                        ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
@@ -556,15 +536,14 @@
             const pageCards = cards.slice(start, start + perPage);
             c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
                 const owned = !!collection[card.id];
-                const img = getCardImageSrc(card);
-                const fallback = getCardFallbackSrc(card);
+                const img = card.image;
                 const price = card.marketPrice;
                 const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
                     ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';};">` : `<span class="no-img">Sin imagen</span>`}
+                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
@@ -629,18 +608,17 @@
             c.innerHTML = `<div class="collection-list">${cards.map(card => {
                 const dex = card.dexId || 9999;
                 const dexStr = dex < 9999 ? '#' + String(dex).padStart(3, '0') : '???';
-                let img = card.image;
-                if (img && !img.endsWith('.png') && !img.endsWith('.webp') && !img.endsWith('.jpg')) img = img + '/high.webp';
-                const fallbackImg = `https://images.pokemontcg.io/${(card.set?.id || '').toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png`;
+                const img = card.imageLarge || card.image;
+                const price = card.marketPrice;
                 return `<div class="collection-item">
                     <div class="collection-dex-num">${dexStr}</div>
-                    ${img ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.onerror=null; this.src='${fallbackImg}'; this.onerror=function(){this.style.display='none';};">` : `<img class="collection-thumb" src="${fallbackImg}" alt="${card.name}" onerror="this.style.display='none';">`}
+                    ${img ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.style.display='none';">` : `<div class="collection-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.7rem;">Sin img</div>`}
                     <div class="collection-info">
                         <h4>${card.name}</h4>
-                        <p>${card.set?.name || ''} #${card.number || ''} ${card.rarity || ''}</p>
+                        <p>${card.set?.name || ''} #${card.number || ''} ${card.rarity || ''}${price != null ? ' — $' + price.toFixed(2) : ''}</p>
                     </div>
                     <div class="collection-qty">
-                        <button class="qty-btn" onclick="changeQty('${card.id}',-1)">ÔêÆ</button>
+                        <button class="qty-btn" onclick="changeQty('${card.id}',-1)">−</button>
                         <span class="qty-display">${card.quantity || 1}</span>
                         <button class="qty-btn" onclick="changeQty('${card.id}',1)">+</button>
                     </div>
@@ -699,14 +677,6 @@
                 const d = await r.json();
                 d.results.forEach((p, i) => { pokemonDexCache[p.name] = i + 1; });
             } catch (e) {}
-        }
-
-        function getDexId(card) {
-            if (card.dexId) return card.dexId;
-            const name = card.name?.toLowerCase().replace(/[^a-z]/g, '');
-            if (pokemonDexCache[name]) return pokemonDexCache[name];
-            const reversed = Object.entries(pokemonDexCache).find(([k]) => k.includes(name));
-            return reversed ? reversed[1] : null;
         }
 
         let allSets = [];
