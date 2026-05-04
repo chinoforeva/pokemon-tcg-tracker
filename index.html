@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pokémon TCG Collection Tracker</title>
+    <title>Pok├®mon TCG Collection Tracker</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -169,7 +169,7 @@
         <div class="header-content">
             <div class="logo">
                 <div class="logo-icon"></div>
-                <h1>Pokémon TCG Tracker</h1>
+                <h1>Pok├®mon TCG Tracker</h1>
             </div>
             <nav>
                 <button class="nav-btn" id="btn-expansions" onclick="showView('expansions')">Expansions</button>
@@ -242,7 +242,7 @@
                 <div class="stat-card"><div class="stat-value" id="colUnique">0</div><div class="stat-label">Unique Cards</div></div>
                 <div class="stat-card"><div class="stat-value" id="colTotal">0</div><div class="stat-label">Total Cards</div></div>
                 <div class="stat-card"><div class="stat-value" id="colExpansions">0</div><div class="stat-label">Expansions</div></div>
-                <div class="stat-card"><div class="stat-value" id="colSpecies">0</div><div class="stat-label">Pokémon Species</div></div>
+                <div class="stat-card"><div class="stat-value" id="colSpecies">0</div><div class="stat-label">Pok├®mon Species</div></div>
             </div>
             <div class="controls">
                 <div class="search-box">
@@ -252,7 +252,7 @@
             <div class="collection-sort">
                 Sort by:
                 <select id="collectionSort" onchange="renderCollection()">
-                    <option value="dex">Pokédex Number</option>
+                    <option value="dex">Pok├®dex Number</option>
                     <option value="set-exp">Expansion & Number</option>
                     <option value="name">Name A-Z</option>
                     <option value="rarity">Rarity</option>
@@ -263,39 +263,19 @@
         </div>
     </main>
     <script>
-        const API_BASE = 'https://api.poke.church/v1';
-        const API_KEY = 'pk_41b9b04f63e97bc8c5346fc02406ec4ebaa1e9bbbba90b01ab3e891a138843e3';
-
         async function fetchJSON(url) {
-            const r = await fetch(url, { headers: { 'X-API-KEY': API_KEY } });
+            const r = await fetch(url);
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return r.json();
-        }
-
-        async function loadSeries() {
-            try {
-                const data = await fetchJSON(`${API_BASE}/series?language=en`);
-                const list = data.data || data.value || [];
-                seriesMap = {};
-                list.forEach(s => { seriesMap[s.id] = s.name; });
-            } catch (e) { console.warn('Failed to load series:', e); }
         }
 
         async function loadSets() {
             document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading expansions...</span></div>';
             try {
-                let allData = [], page = 1, totalPages = 1;
-                while (page <= totalPages) {
-                    const data = await fetchJSON(`${API_BASE}/sets?language=en&limit=250&page=${page}`);
-                    const items = data.data || [];
-                    allData = allData.concat(items);
-                    totalPages = data.pagination?.totalPages || 1;
-                    page++;
-                }
-                allSets = allData.map(s => ({
-                    id: s.id, name: s.name, total: s.total, series: seriesMap[s.seriesId] || s.seriesId,
-                    releaseDate: s.releaseDate, logo: s.logoUrl, symbol: s.symbolUrl,
-                    officialCardCount: s.officialCardCount
+                const data = await fetchJSON('https://api.pokemontcg.io/v2/sets?pageSize=250&orderBy=-releaseDate');
+                allSets = (data.data || []).map(s => ({
+                    id: s.id, name: s.name, total: s.total, series: s.series,
+                    releaseDate: s.releaseDate, logo: s.images?.logo, symbol: s.images?.symbol
                 }));
                 populateSeriesFilter();
                 renderExpansions(allSets);
@@ -358,23 +338,41 @@
             document.getElementById('rarityFilter').innerHTML = '<option value="">All Rarities</option>';
             currentSet = setObj;
             try {
-                let allData = [], page = 1, totalPages = 1;
-                while (page <= totalPages) {
-                    const data = await fetchJSON(`${API_BASE}/cards?language=en&setId=${setId}&limit=250&page=${page}`);
-                    const cards = data.data || [];
+                let allData = [];
+                let p = 1, totalCount = Infinity;
+                while (allData.length < totalCount) {
+                    const raw = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${setId}&page=${p}&pageSize=250&orderBy=number`);
+                    if (!raw.ok) throw new Error(`HTTP ${raw.status}`);
+                    const d = await raw.json();
+                    const cards = d.data || [];
+                    totalCount = d.totalCount || cards.length;
                     allData = allData.concat(cards);
-                    totalPages = data.pagination?.totalPages || 1;
-                    page++;
+                    p++;
                 }
                 allCards = allData.map(c => ({
                     id: c.id, name: c.name, number: c.number, rarity: c.rarity,
-                    set: { id: c.setId || '', name: currentSet?.name || '' },
-                    hp: c.hp, types: Array.isArray(c.types) ? c.types : (c.types ? [c.types] : []),
-                    dexId: Array.isArray(c.dexIds) ? c.dexIds[0] : (c.dexIds ? parseInt(c.dexIds) : null),
-                    image: c.imageUrlFront, imageLarge: c.imageUrlFront,
-                    stage: c.stage, subtype: c.category,
-                    variants: c.variants
+                    set: { id: c.set?.id || '', name: c.set?.name || '' },
+                    hp: c.hp, types: c.types, dexId: c.nationalPokedexNumbers?.[0],
+                    image: c.images?.small, imageLarge: c.images?.large,
+                    stage: c.stage, subtype: c.subtypes?.[0]
                 }));
+                const setTotal = currentSet?.total || 0;
+                allCards.forEach(card => {
+                    if (!card.rarity) {
+                        const num = parseInt(card.number, 10) || 0;
+                        const sub = card.subtype || '';
+                        if (sub === 'VMAX') card.rarity = 'Rare Holo VMAX';
+                        else if (sub === 'VSTAR') card.rarity = 'Rare Holo VSTAR';
+                        else if (sub === 'V' || sub === 'ex' || sub === 'GX') card.rarity = 'Rare Holo ' + sub;
+                        else if (num > setTotal && setTotal > 0) {
+                            const range = setTotal * 0.5, pos = num - setTotal;
+                            if (pos > range * 0.8) card.rarity = 'Hyper Rare';
+                            else if (pos > range * 0.6) card.rarity = 'Special Illustration Rare';
+                            else if (pos > range * 0.3) card.rarity = 'Illustration Rare';
+                            else card.rarity = 'Rare Secret';
+                        } else card.rarity = 'Rare';
+                    }
+                });
                 totalCardCount = allCards.length;
                 populateRarityFilter();
                 currentPage = 1;
@@ -447,26 +445,19 @@
             globalSearchTimeout = setTimeout(async () => {
                 document.getElementById('globalCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
                 try {
-                    let all = [], page = 1, totalPages = 1;
-                    while (page <= totalPages) {
-                        const data = await fetchJSON(`${API_BASE}/cards?language=en&name=${encodeURIComponent(q)}&limit=250&page=${page}`);
-                        const items = data.data || [];
-                        all = all.concat(items);
-                        totalPages = data.pagination?.totalPages || 1;
+                    let all = [], page = 1;
+                    while (true) {
+                        const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(q)}*&page=${page}&pageSize=250&orderBy=number`);
+                        const d = await res.json();
+                        all = all.concat(d.data || []);
+                        if (!d.data || d.data.length < 250) break;
                         page++;
                     }
                     globalSearchCards = all.map(c => ({
                         id: c.id, name: c.name, number: c.number, rarity: c.rarity,
-                        set: { id: c.setId || '', name: '' },
-                        image: c.imageUrlFront
+                        set: { id: c.set?.id || '', name: c.set?.name || '' },
+                        image: c.images?.small
                     }));
-                    const setIdSet = new Set(globalSearchCards.map(c => c.set.id).filter(Boolean));
-                    const setNames = {};
-                    for (const sid of setIdSet) {
-                        const s = allSets.find(x => x.id === sid);
-                        if (s) setNames[sid] = s.name;
-                    }
-                    globalSearchCards.forEach(c => { if (setNames[c.set.id]) c.set.name = setNames[c.set.id]; });
                     renderGlobalCards(globalSearchCards);
                 } catch (e) {
                     document.getElementById('globalCardsContent').innerHTML = `<div class="error-msg">Error. ${e.message}</div>`;
@@ -479,12 +470,12 @@
             if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
             c.innerHTML = `<div class="cards-grid">${cards.map(card => {
                 const owned = !!collection[card.id];
-                const setName = card.set?.name || '';
+                const setName = card.set?.name || card.set?.id || '';
                 const setId = card.set?.id || '';
                 return `<div class="card-tcg ${owned ? 'owned' : ''}">
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';">` : `<span class="no-img">No image</span>`}
+                        ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/${setId.toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
@@ -609,16 +600,18 @@
             c.innerHTML = `<div class="collection-list">${cards.map(card => {
                 const dex = card.dexId || 9999;
                 const dexStr = dex < 9999 ? '#' + String(dex).padStart(3, '0') : '???';
-                const img = card.image;
+                let img = card.image;
+                if (img && !img.endsWith('.png') && !img.endsWith('.webp') && !img.endsWith('.jpg')) img = img + '/high.webp';
+                const fallbackImg = `https://images.pokemontcg.io/${(card.set?.id || '').toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png`;
                 return `<div class="collection-item">
                     <div class="collection-dex-num">${dexStr}</div>
-                    ${img ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.style.display='none';">` : `<div class="collection-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.7rem;">No img</div>`}
+                    ${img ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.onerror=null; this.src='${fallbackImg}'; this.onerror=function(){this.style.display='none';};">` : `<img class="collection-thumb" src="${fallbackImg}" alt="${card.name}" onerror="this.style.display='none';">`}
                     <div class="collection-info">
                         <h4>${card.name}</h4>
                         <p>${card.set?.name || ''} #${card.number || ''} ${card.rarity || ''}</p>
                     </div>
                     <div class="collection-qty">
-                        <button class="qty-btn" onclick="changeQty('${card.id}',-1)">−</button>
+                        <button class="qty-btn" onclick="changeQty('${card.id}',-1)">ÔêÆ</button>
                         <span class="qty-display">${card.quantity || 1}</span>
                         <button class="qty-btn" onclick="changeQty('${card.id}',1)">+</button>
                     </div>
@@ -696,9 +689,8 @@
         let collection = JSON.parse(localStorage.getItem('pokemonCollection') || '{}');
         let pokemonDexCache = {};
         let currentMode = 'sets';
-        let seriesMap = {};
 
-        document.addEventListener('DOMContentLoaded', () => { loadSeries(); loadSets(); loadDex(); });
+        document.addEventListener('DOMContentLoaded', () => { loadSets(); loadDex(); });
     </script>
 </body>
 </html>
