@@ -484,7 +484,7 @@
 
         function findSetById(setId) {
             if (!setId) return null;
-            return allSets.find(s => s.id === setId) || null;
+            return allSets.find(s => s.id.toLowerCase() === setId.toLowerCase()) || null;
         }
 
         function buildCardBrief(raw) {
@@ -565,7 +565,7 @@
         }
 
         async function openSet(setId) {
-            const setObj = allSets.find(s => s.id === setId);
+            const setObj = allSets.find(s => s.id.toLowerCase() === setId.toLowerCase());
             if (!setObj) return;
             document.getElementById('cardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Cargando cartas...</span></div>';
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
