@@ -100,6 +100,14 @@
         .card-tcg:hover { transform: translateY(-3px); border-color: var(--border-hover); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
         .card-tcg.owned { border-color: var(--success); }
         .card-tcg.owned .owned-badge { display: flex; }
+        .price-tag {
+            position: absolute; top: 8px; left: 8px; z-index: 2;
+            background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+            color: #00d4aa; padding: 2px 7px; border-radius: 6px;
+            font-size: 0.7rem; font-weight: 700; white-space: nowrap;
+            border: 1px solid rgba(0,212,170,0.3);
+        }
+        .price-tag.no-price { color: var(--text-muted); border-color: var(--border); background: rgba(0,0,0,0.6); }
         .owned-badge {
             display: none; position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
             background: var(--success); border-radius: 50%; align-items: center; justify-content: center;
@@ -354,7 +362,8 @@
                     set: { id: c.set?.id || '', name: c.set?.name || '' },
                     hp: c.hp, types: c.types, dexId: c.nationalPokedexNumbers?.[0],
                     image: c.images?.small, imageLarge: c.images?.large,
-                    stage: c.stage, subtype: c.subtypes?.[0]
+                    stage: c.stage, subtype: c.subtypes?.[0],
+                    marketPrice: getMarketPrice(c)
                 }));
                 const setTotal = currentSet?.total || 0;
                 allCards.forEach(card => {
@@ -399,6 +408,16 @@
             rarities.forEach(r => { sel.innerHTML += `<option value="${r}">${r}</option>`; });
         }
 
+        function getMarketPrice(c) {
+            const p = c.tcgplayer?.prices;
+            if (!p) return null;
+            const variants = ['holofoil', 'normal', 'reverseHolofoil', '1stEditionHolofoil', '1stEditionNormal'];
+            for (const v of variants) {
+                if (p[v]?.market) return parseFloat(p[v].market);
+            }
+            return null;
+        }
+
         function getCardImageSrc(card) { return card.image || null; }
 
         function getCardFallbackSrc(card) {
@@ -416,7 +435,10 @@
                 const owned = !!collection[card.id];
                 const img = getCardImageSrc(card);
                 const fallback = getCardFallbackSrc(card);
+                const price = card.marketPrice;
+                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/A</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
+                    ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
@@ -456,7 +478,8 @@
                     globalSearchCards = all.map(c => ({
                         id: c.id, name: c.name, number: c.number, rarity: c.rarity,
                         set: { id: c.set?.id || '', name: c.set?.name || '' },
-                        image: c.images?.small
+                        image: c.images?.small,
+                        marketPrice: getMarketPrice(c)
                     }));
                     renderGlobalCards(globalSearchCards);
                 } catch (e) {
@@ -472,7 +495,10 @@
                 const owned = !!collection[card.id];
                 const setName = card.set?.name || card.set?.id || '';
                 const setId = card.set?.id || '';
+                const price = card.marketPrice;
+                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/A</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}">
+                    ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/${setId.toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
@@ -532,7 +558,10 @@
                 const owned = !!collection[card.id];
                 const img = getCardImageSrc(card);
                 const fallback = getCardFallbackSrc(card);
+                const price = card.marketPrice;
+                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/A</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
+                    ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
