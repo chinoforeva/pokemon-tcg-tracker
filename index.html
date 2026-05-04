@@ -294,6 +294,21 @@
             return `${ASSETS}/${card.imageBase || ''}/${quality}.${ext}`;
         }
 
+        const SERIES_ORDER = {
+            'sv': 1, 'swsh': 2, 'sm': 3, 'xy': 4, 'bw': 5,
+            'hgss': 6, 'pl': 7, 'dp': 8, 'ex': 9, 'neo': 10,
+            'gym': 11, 'base': 12, 'mc': 13, 'fut': 14, 'cel': 15,
+            'pop': 16, 'si': 17, 'np': 18, 'promo': 19
+        };
+
+        function parseSetOrder(setId) {
+            const m = setId.match(/^([a-z]+)(\d+)?/i);
+            if (!m) return 999;
+            const prefix = m[1].toLowerCase();
+            const num = parseInt(m[2] || '0', 10);
+            return (SERIES_ORDER[prefix] || 50) * 1000 + num;
+        }
+
         function getSetSerie(setId) {
             const m = setId.match(/^([a-z]+?)(?:\d|$)/i);
             return m ? m[1].toLowerCase() : setId.split(/(?=\d)/)[0];
@@ -425,6 +440,7 @@
                     series: getSetSerie(s.id), logo: s.logo ? `${s.logo}.webp` : null,
                     symbol: s.symbol ? `${s.symbol}.webp` : null
                 }));
+                allSets.sort((a, b) => parseSetOrder(a.id) - parseSetOrder(b.id));
                 populateSeriesFilter();
                 renderExpansions(allSets);
             } catch (e) {
@@ -488,6 +504,11 @@
             try {
                 const rawCards = await fetchJSON(`${API}/cards?set=${setId}`);
                 allCards = rawCards.map(c => buildCardBrief(c));
+                allCards.sort((a, b) => {
+                    const da = a.dexId || 9999, db = b.dexId || 9999;
+                    if (da !== db) return da - db;
+                    return (a.number || '').localeCompare(b.number || '', undefined, { numeric: true });
+                });
                 totalCardCount = allCards.length;
                 populateRarityFilter();
                 renderCards();
