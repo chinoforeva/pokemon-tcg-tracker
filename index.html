@@ -100,14 +100,6 @@
         .card-tcg:hover { transform: translateY(-3px); border-color: var(--border-hover); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
         .card-tcg.owned { border-color: var(--success); }
         .card-tcg.owned .owned-badge { display: flex; }
-        .price-tag {
-            position: absolute; top: 8px; left: 8px; z-index: 2;
-            background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
-            color: #00d4aa; padding: 2px 7px; border-radius: 6px;
-            font-size: 0.7rem; font-weight: 700; white-space: nowrap;
-            border: 1px solid rgba(0,212,170,0.3);
-        }
-        .price-tag.no-price { color: var(--text-muted); border-color: var(--border); background: rgba(0,0,0,0.6); }
         .owned-badge {
             display: none; position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
             background: var(--success); border-radius: 50%; align-items: center; justify-content: center;
@@ -294,19 +286,6 @@
             return m ? m[1].toLowerCase() : setId.split(/(?=\d)/)[0];
         }
 
-        function getMarketPrice(card) {
-            const tcg = card.pricing?.tcgplayer;
-            if (tcg) {
-                const variants = ['holofoil', '1st-edition-holofoil', 'unlimited-holofoil', 'normal', '1st-edition', 'unlimited', 'reverse-holofoil'];
-                for (const v of variants) {
-                    if (tcg[v]?.marketPrice) return parseFloat(tcg[v].marketPrice);
-                }
-            }
-            const cm = card.pricing?.cardmarket;
-            if (cm?.trend) return parseFloat(cm.trend);
-            return null;
-        }
-
         function extractSetIdFromCardId(cardId) {
             const m = cardId.match(/^([a-zA-Z0-9.]+(?:-[a-zA-Z0-9.]+)?)\s*-/);
             return m ? m[1] : '';
@@ -332,9 +311,7 @@
                 image: raw.image ? `${raw.image}/low.webp` : null,
                 imageLarge: raw.image ? `${raw.image}/high.webp` : null,
                 hp: raw.hp || null, types: raw.types || [],
-                stage: raw.stage || null, subtype: raw.category || null,
-                marketPrice: getMarketPrice(raw),
-                pricing: raw.pricing || null
+                stage: raw.stage || null, subtype: raw.category || null
             };
         }
 
@@ -444,10 +421,7 @@
             c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
                 const owned = !!collection[card.id];
                 const img = card.image;
-                const price = card.marketPrice;
-                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
-                    ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
@@ -492,33 +466,21 @@
                 const owned = !!collection[card.id];
                 const setName = card.set?.name || '';
                 const setId = card.set?.id || '';
-                const price = card.marketPrice;
-                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
-                const setBtn = setId ? `<button class="remove-btn" onclick="goToSet('${setId}')" style="margin-bottom:4px;background:#555;">Ver set</button>` : '';
                 return `<div class="card-tcg ${owned ? 'owned' : ''}">
-                    ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
-                        <div class="card-meta">${setName ? `<span style="cursor:pointer;text-decoration:underline;" onclick="goToSet('${setId}')">${setName}</span> ` : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
+                        <div class="card-meta">${setName ? setName + ' ' : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
                     </div>
                     <div class="card-actions">
-                        ${setBtn}
-                        <button class="remove-btn" onclick="goToCard('${card.id}', '${setId}')" style="margin-bottom:4px;">Ir a carta</button>
+                        <button class="remove-btn" onclick="goToCard('${card.id}', '${setId}')">Ir a carta</button>
                         ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Quitar</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Agregar</button>`}
                     </div>
                 </div>`;
             }).join('')}</div>`;
-        }
-
-        function goToSet(setId) {
-            if (!setId) { toast('Set no encontrado'); return; }
-            const targetSet = findSetById(setId);
-            if (!targetSet) { toast('Set "' + setId + '" no encontrado en las expansiones cargadas'); return; }
-            openSet(targetSet.id);
         }
 
         async function goToCard(cardId, setId) {
@@ -539,7 +501,24 @@
                     el.style.boxShadow = '0 0 0 3px var(--accent), 0 0 30px var(--accent-glow)';
                     setTimeout(() => { el.style.boxShadow = ''; }, 2000);
                 } else {
-                    toast('Set cargado, pero la carta no está en la primera página. Usa el buscador.');
+                    const num = (cardId.split('-').pop() || '').replace(/^0+/, '');
+                    const searchInput = document.getElementById('cardSearch');
+                    if (searchInput && num) {
+                        searchInput.value = num;
+                        filterCards();
+                        setTimeout(() => {
+                            const el2 = document.querySelector(`.card-tcg[data-card-id="${cardId}"]`);
+                            if (el2) {
+                                el2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                el2.style.boxShadow = '0 0 0 3px var(--accent), 0 0 30px var(--accent-glow)';
+                                setTimeout(() => { el2.style.boxShadow = ''; }, 2000);
+                            } else {
+                                toast('Set cargado, pero la carta no está en la primera página. Usa el buscador del set.');
+                            }
+                        }, 400);
+                    } else {
+                        toast('Set cargado, pero la carta no está en la primera página. Usa el buscador del set.');
+                    }
                 }
             }, 800);
         }
@@ -571,10 +550,7 @@
             c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
                 const owned = !!collection[card.id];
                 const img = card.image;
-                const price = card.marketPrice;
-                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
-                    ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
@@ -643,13 +619,12 @@
                 const dex = card.dexId || 9999;
                 const dexStr = dex < 9999 ? '#' + String(dex).padStart(3, '0') : '???';
                 const img = card.imageLarge || card.image;
-                const price = card.marketPrice;
                 return `<div class="collection-item">
                     <div class="collection-dex-num">${dexStr}</div>
                     ${img ? `<img class="collection-thumb" src="${img}" alt="${card.name}" onerror="this.style.display='none';">` : `<div class="collection-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.7rem;">Sin img</div>`}
                     <div class="collection-info">
                         <h4>${card.name}</h4>
-                        <p>${card.set?.name || ''} #${card.number || ''} ${card.rarity || ''}${price != null ? ' — $' + price.toFixed(2) : ''}</p>
+                        <p>${card.set?.name || ''} #${card.number || ''} ${card.rarity || ''}</p>
                     </div>
                     <div class="collection-qty">
                         <button class="qty-btn" onclick="changeQty('${card.id}',-1)">−</button>
