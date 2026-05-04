@@ -105,6 +105,29 @@
             background: var(--success); border-radius: 50%; align-items: center; justify-content: center;
             color: var(--bg-primary); font-weight: 700; font-size: 0.8rem; z-index: 2; box-shadow: 0 2px 8px var(--success-glow);
         }
+        .price-btn {
+            position: absolute; top: 8px; left: 8px; z-index: 3;
+            width: 28px; height: 28px; border-radius: 50%; border: none;
+            background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+            color: #00d4aa; font-size: 0.7rem; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid rgba(0,212,170,0.3); transition: all 0.2s;
+        }
+        .price-btn:hover { background: rgba(0,212,170,0.2); transform: scale(1.1); }
+        .price-btn.loading { color: var(--text-muted); border-color: var(--border); }
+        .price-dropdown {
+            display: none; position: absolute; top: 42px; left: 8px; z-index: 10;
+            background: rgba(18,18,42,0.95); backdrop-filter: blur(12px);
+            border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.8rem;
+            min-width: 180px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+        .price-dropdown.show { display: block; }
+        .price-dropdown .price-row { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; font-size: 0.72rem; }
+        .price-dropdown .price-label { color: var(--text-muted); }
+        .price-dropdown .price-value { color: #00d4aa; font-weight: 700; }
+        .price-dropdown .price-value.no-data { color: var(--text-muted); }
+        .price-dropdown .price-divider { height: 1px; background: var(--border); margin: 0.3rem 0; }
+        .price-dropdown .price-market { font-size: 0.65rem; color: var(--text-muted); margin-bottom: 0.2rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         .card-img-wrap { width: 100%; aspect-ratio: 245/340; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .card-img-wrap .no-img { color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 0.5rem; }
@@ -136,11 +159,6 @@
         .qty-display { font-weight: 700; min-width: 24px; text-align: center; }
         .del-btn { padding: 0.4rem 0.8rem; background: rgba(233,69,96,0.1); border: 1px solid rgba(233,69,96,0.2); border-radius: 8px; color: var(--accent); font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; }
         .del-btn:hover { background: var(--accent); color: white; }
-        .pagination { display: none; }
-        .page-btn { padding: 0.6rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-secondary); font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; font-size: 0.85rem; }
-        .page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text-primary); }
-        .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-        .page-info { color: var(--text-muted); font-size: 0.85rem; padding: 0 0.5rem; }
         .empty-state { text-align: center; padding: 4rem 2rem; }
         .empty-state h3 { font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--text-secondary); }
         .empty-state p { color: var(--text-muted); font-size: 0.9rem; }
@@ -228,11 +246,6 @@
                 </select>
             </div>
             <div id="cardsContent"></div>
-            <div class="pagination">
-                <button class="page-btn" id="prevPage" onclick="changePage(-1)">Anterior</button>
-                <span class="page-info" id="pageInfo"></span>
-                <button class="page-btn" id="nextPage" onclick="changePage(1)">Siguiente</button>
-            </div>
         </div>
         <div id="view-collection" class="view">
             <div class="section-header">
@@ -284,6 +297,94 @@
         function getSetSerie(setId) {
             const m = setId.match(/^([a-z]+?)(?:\d|$)/i);
             return m ? m[1].toLowerCase() : setId.split(/(?=\d)/)[0];
+        }
+
+        let pricingCache = {};
+        let openPriceDropdown = null;
+
+        function formatPrice(value, unit) {
+            if (value == null) return null;
+            const num = parseFloat(value);
+            if (isNaN(num) || num === 0) return null;
+            if (unit === 'EUR') return '€' + num.toFixed(2);
+            return '$' + num.toFixed(2);
+        }
+
+        function buildPriceHTML(pricing) {
+            if (!pricing) return '<div class="price-row"><span class="price-label">Sin datos</span><span class="price-value no-data">N/D</span></div>';
+            let html = '';
+            const cm = pricing.cardmarket;
+            const tcg = pricing.tcgplayer;
+            if (cm) {
+                html += '<div class="price-market">Cardmarket (EUR)</div>';
+                const cmPrices = [
+                    ['Tendencia', cm.trend],
+                    ['Media', cm.avg],
+                    ['Mínimo', cm.low],
+                    ['Media 30d', cm.avg30]
+                ];
+                cmPrices.forEach(([label, val]) => {
+                    const formatted = formatPrice(val, 'EUR');
+                    if (formatted) html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${formatted}</span></div>`;
+                });
+            }
+            if (cm && tcg) html += '<div class="price-divider"></div>';
+            if (tcg) {
+                html += '<div class="price-market">TCGPlayer (USD)</div>';
+                const variants = ['normal', 'holofoil', 'reverse-holofoil', '1st-edition', 'unlimited'];
+                variants.forEach(v => {
+                    if (tcg[v]?.marketPrice) {
+                        const formatted = formatPrice(tcg[v].marketPrice, 'USD');
+                        if (formatted) html += `<div class="price-row"><span class="price-label">${v.replace(/-/g, ' ')}</span><span class="price-value">${formatted}</span></div>`;
+                    }
+                });
+            }
+            if (!html) html = '<div class="price-row"><span class="price-label">Sin datos</span><span class="price-value no-data">N/D</span></div>';
+            return html;
+        }
+
+        async function fetchCardPricing(cardId) {
+            if (pricingCache[cardId]) return pricingCache[cardId];
+            const data = await fetchJSON(`${API}/cards/${encodeURIComponent(cardId)}`);
+            pricingCache[cardId] = data?.pricing || null;
+            return pricingCache[cardId];
+        }
+
+        async function togglePriceDropdown(cardId, event) {
+            event.stopPropagation();
+            if (openPriceDropdown && openPriceDropdown.id !== cardId) {
+                const prev = document.querySelector(`.price-dropdown[data-card-id="${openPriceDropdown.id}"]`);
+                if (prev) prev.classList.remove('show');
+            }
+            const dropdown = document.querySelector(`.price-dropdown[data-card-id="${cardId}"]`);
+            if (!dropdown) return;
+            if (dropdown.classList.contains('show')) {
+                dropdown.classList.remove('show');
+                openPriceDropdown = null;
+                return;
+            }
+            dropdown.classList.add('show');
+            openPriceDropdown = { id: cardId };
+            if (pricingCache[cardId]) {
+                dropdown.innerHTML = buildPriceHTML(pricingCache[cardId]);
+                return;
+            }
+            const btn = dropdown.parentElement.querySelector('.price-btn');
+            btn.classList.add('loading');
+            btn.textContent = '...';
+            try {
+                const pricing = await fetchCardPricing(cardId);
+                dropdown.innerHTML = buildPriceHTML(pricing);
+            } catch (e) {
+                dropdown.innerHTML = '<div class="price-row"><span class="price-label">Error</span><span class="price-value no-data">!</span></div>';
+            }
+            btn.classList.remove('loading');
+            btn.textContent = '$';
+        }
+
+        function closeAllPriceDropdowns() {
+            document.querySelectorAll('.price-dropdown.show').forEach(d => d.classList.remove('show'));
+            openPriceDropdown = null;
         }
 
         function extractSetIdFromCardId(cardId) {
@@ -389,21 +490,11 @@
                 allCards = rawCards.map(c => buildCardBrief(c));
                 totalCardCount = allCards.length;
                 populateRarityFilter();
-                currentPage = 1;
                 renderCards();
                 updateStats();
-                updatePageInfo();
             } catch (e) {
                 document.getElementById('cardsContent').innerHTML = `<div class="error-msg">Error al cargar cartas. ${e.message}</div>`;
             }
-        }
-
-        function updatePageInfo() {
-            const totalPages = Math.max(1, Math.ceil(totalCardCount / perPage));
-            document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${totalPages}`;
-            document.getElementById('prevPage').disabled = currentPage <= 1;
-            document.getElementById('nextPage').disabled = currentPage >= totalPages;
-            document.getElementById('prevPage').closest('.pagination').style.display = totalPages > 1 ? '' : 'none';
         }
 
         function populateRarityFilter() {
@@ -416,12 +507,16 @@
         function renderCards() {
             const c = document.getElementById('cardsContent');
             if (!allCards.length) { c.innerHTML = '<div class="empty-state"><h3>No se encontraron cartas</h3></div>'; return; }
-            const start = (currentPage - 1) * perPage;
-            const pageCards = allCards.slice(start, start + perPage);
-            c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
-                const owned = !!collection[card.id];
-                const img = card.image;
-                return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
+            c.innerHTML = `<div class="cards-grid">${allCards.map(card => buildCardHTML(card)).join('')}</div>`;
+        }
+
+        function buildCardHTML(card, showPrice = true) {
+            const owned = !!collection[card.id];
+            const img = card.image;
+            const priceBtn = showPrice ? `<button class="price-btn" onclick="togglePriceDropdown('${card.id}', event)">$</button>
+                    <div class="price-dropdown" data-card-id="${card.id}"><div class="price-row"><span class="price-label">Cargando...</span></div></div>` : '';
+            return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
+                    ${priceBtn}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
@@ -434,7 +529,6 @@
                         ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Quitar</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Agregar</button>`}
                     </div>
                 </div>`;
-            }).join('')}</div>`;
         }
 
         let globalSearchTimeout = null;
@@ -467,6 +561,8 @@
                 const setName = card.set?.name || '';
                 const setId = card.set?.id || '';
                 return `<div class="card-tcg ${owned ? 'owned' : ''}">
+                    <button class="price-btn" onclick="togglePriceDropdown('${card.id}', event)">$</button>
+                    <div class="price-dropdown" data-card-id="${card.id}"><div class="price-row"><span class="price-label">Cargando...</span></div></div>
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
                         ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
@@ -536,34 +632,15 @@
                 const m2 = !rarity || c.rarity === rarity;
                 return m1 && m2;
             });
-            totalCardCount = filtered.length; currentPage = 1;
+            totalCardCount = filtered.length;
             renderFilteredCards(filtered);
             updateStatsFiltered(filtered);
-            updatePageInfo();
         }
 
         function renderFilteredCards(cards) {
             const c = document.getElementById('cardsContent');
             if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No se encontraron cartas</h3></div>'; return; }
-            const start = (currentPage - 1) * perPage;
-            const pageCards = cards.slice(start, start + perPage);
-            c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
-                const owned = !!collection[card.id];
-                const img = card.image;
-                return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
-                    <div class="owned-badge"></div>
-                    <div class="card-img-wrap">
-                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';">` : `<span class="no-img">Sin imagen</span>`}
-                    </div>
-                    <div class="card-details">
-                        <div class="card-name">${card.name}</div>
-                        <div class="card-meta">${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
-                    </div>
-                    <div class="card-actions">
-                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Quitar</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Agregar</button>`}
-                    </div>
-                </div>`;
-            }).join('')}</div>`;
+            c.innerHTML = `<div class="cards-grid">${cards.map(card => buildCardHTML(card)).join('')}</div>`;
         }
 
         function updateStatsFiltered(cards) {
@@ -572,17 +649,6 @@
             document.getElementById('totalCards').textContent = total;
             document.getElementById('ownedCards').textContent = owned;
             document.getElementById('progressPercent').textContent = total ? Math.round(owned / total * 100) + '%' : '0%';
-        }
-
-        async function changePage(dir) {
-            const totalPages = Math.ceil(totalCardCount / perPage);
-            const newPage = currentPage + dir;
-            if (newPage < 1 || newPage > totalPages) return;
-            currentPage = newPage;
-            const search = document.getElementById('cardSearch').value.toLowerCase();
-            const rarity = document.getElementById('rarityFilter').value;
-            if (search || rarity) { filterCards(); } else { renderCards(); }
-            updatePageInfo(); window.scrollTo(0, 0);
         }
 
         function updateStats() {
@@ -692,11 +758,15 @@
         let currentSet = null;
         let allCards = [];
         let totalCardCount = 0;
-        let currentPage = 1;
-        const perPage = 100;
         let collection = JSON.parse(localStorage.getItem('pokemonCollection') || '{}');
         let pokemonDexCache = {};
         let currentMode = 'sets';
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.price-btn') && !e.target.closest('.price-dropdown')) {
+                closeAllPriceDropdowns();
+            }
+        });
 
         document.addEventListener('DOMContentLoaded', () => { loadSets(); loadDex(); });
     </script>
