@@ -1,9 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pok├®mon TCG Collection Tracker</title>
+    <title>Chini Collection</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -177,30 +177,30 @@
         <div class="header-content">
             <div class="logo">
                 <div class="logo-icon"></div>
-                <h1>Pok├®mon TCG Tracker</h1>
+                <h1>Chini Collection</h1>
             </div>
             <nav>
-                <button class="nav-btn" id="btn-expansions" onclick="showView('expansions')">Expansions</button>
-                <button class="nav-btn" id="btn-collection" onclick="showView('collection')">My Collection</button>
+                <button class="nav-btn" id="btn-expansions" onclick="showView('expansions')">Expansiones</button>
+                <button class="nav-btn" id="btn-collection" onclick="showView('collection')">Mi Colección</button>
             </nav>
         </div>
     </header>
     <main>
         <div id="view-expansions" class="view active">
             <div class="section-header">
-                <h2 class="section-title" id="expansionsTitle">All Expansions</h2>
+                <h2 class="section-title" id="expansionsTitle">Todas las Expansiones</h2>
                 <div class="mode-toggle">
                     <button class="mode-btn active" id="btn-mode-sets" onclick="setMode('sets')">Sets</button>
-                    <button class="mode-btn" id="btn-mode-cards" onclick="setMode('cards')">Cards</button>
+                    <button class="mode-btn" id="btn-mode-cards" onclick="setMode('cards')">Cartas</button>
                 </div>
             </div>
             <div id="sets-mode">
                 <div class="controls">
                     <div class="search-box">
-                        <input type="text" id="expansionSearch" placeholder="Search expansions..." oninput="filterExpansions()">
+                        <input type="text" id="expansionSearch" placeholder="Buscar expansiones..." oninput="filterExpansions()">
                     </div>
                     <select class="filter-select" id="seriesFilter" onchange="filterExpansions()">
-                        <option value="">All Series</option>
+                        <option value="">Todas las Series</option>
                     </select>
                 </div>
                 <div id="expansionsContent"></div>
@@ -208,7 +208,7 @@
             <div id="cards-mode" style="display:none;">
                 <div class="controls">
                     <div class="search-box">
-                        <input type="text" id="globalCardSearch" placeholder="Search cards by name..." oninput="searchGlobalCards()">
+                        <input type="text" id="globalCardSearch" placeholder="Buscar cartas por nombre..." oninput="searchGlobalCards()">
                     </div>
                 </div>
                 <div id="globalCardsContent"></div>
@@ -217,54 +217,54 @@
         <div id="view-cards" class="view">
             <button class="back-link" onclick="showView('expansions')">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 8H3M8 3l-5 5 5 5"/></svg>
-                Back to Expansions
+                Back to Expansiones
             </button>
             <div class="section-header">
                 <h2 class="section-title" id="cardsViewTitle"></h2>
             </div>
             <div class="stats-row">
-                <div class="stat-card"><div class="stat-value" id="totalCards">0</div><div class="stat-label">Total Cards</div></div>
-                <div class="stat-card"><div class="stat-value" id="ownedCards">0</div><div class="stat-label">Owned</div></div>
-                <div class="stat-card"><div class="stat-value" id="progressPercent">0%</div><div class="stat-label">Progress</div></div>
+                <div class="stat-card"><div class="stat-value" id="totalCards">0</div><div class="stat-label">Total Cartas</div></div>
+                <div class="stat-card"><div class="stat-value" id="ownedCards">0</div><div class="stat-label">En Posesión</div></div>
+                <div class="stat-card"><div class="stat-value" id="progressPercent">0%</div><div class="stat-label">Progreso</div></div>
             </div>
             <div class="controls">
                 <div class="search-box">
-                    <input type="text" id="cardSearch" placeholder="Search cards..." oninput="filterCards()">
+                    <input type="text" id="cardSearch" placeholder="Buscar cartas..." oninput="filterCards()">
                 </div>
                 <select class="filter-select" id="rarityFilter" onchange="filterCards()">
-                    <option value="">All Rarities</option>
+                    <option value="">Todas las Rarezas</option>
                 </select>
             </div>
             <div id="cardsContent"></div>
             <div class="pagination">
-                <button class="page-btn" id="prevPage" onclick="changePage(-1)">Previous</button>
+                <button class="page-btn" id="prevPage" onclick="changePage(-1)">Anterior</button>
                 <span class="page-info" id="pageInfo"></span>
-                <button class="page-btn" id="nextPage" onclick="changePage(1)">Next</button>
+                <button class="page-btn" id="nextPage" onclick="changePage(1)">Siguiente</button>
             </div>
         </div>
         <div id="view-collection" class="view">
             <div class="section-header">
-                <h2 class="section-title">My Collection</h2>
+                <h2 class="section-title">Mi Colección</h2>
             </div>
             <div class="stats-row">
-                <div class="stat-card"><div class="stat-value" id="colUnique">0</div><div class="stat-label">Unique Cards</div></div>
-                <div class="stat-card"><div class="stat-value" id="colTotal">0</div><div class="stat-label">Total Cards</div></div>
-                <div class="stat-card"><div class="stat-value" id="colExpansions">0</div><div class="stat-label">Expansions</div></div>
-                <div class="stat-card"><div class="stat-value" id="colSpecies">0</div><div class="stat-label">Pok├®mon Species</div></div>
+                <div class="stat-card"><div class="stat-value" id="colUnique">0</div><div class="stat-label">Cartas Únicas</div></div>
+                <div class="stat-card"><div class="stat-value" id="colTotal">0</div><div class="stat-label">Total Cartas</div></div>
+                <div class="stat-card"><div class="stat-value" id="colExpansions">0</div><div class="stat-label">Expansiones</div></div>
+                <div class="stat-card"><div class="stat-value" id="colSpecies">0</div><div class="stat-label">Especies Pokémon</div></div>
             </div>
             <div class="controls">
                 <div class="search-box">
-                    <input type="text" id="collectionSearch" placeholder="Search collection..." oninput="renderCollection()">
+                    <input type="text" id="collectionSearch" placeholder="Buscar colección..." oninput="renderCollection()">
                 </div>
             </div>
             <div class="collection-sort">
-                Sort by:
+                Ordenar por:
                 <select id="collectionSort" onchange="renderCollection()">
-                    <option value="dex">Pok├®dex Number</option>
-                    <option value="set-exp">Expansion & Number</option>
-                    <option value="name">Name A-Z</option>
-                    <option value="rarity">Rarity</option>
-                    <option value="date">Date Added</option>
+                    <option value="dex">Nº Pokédex</option>
+                    <option value="set-exp">Expansión y Número</option>
+                    <option value="name">Nombre A-Z</option>
+                    <option value="rarity">Rareza</option>
+                    <option value="date">Fecha Agregada</option>
                 </select>
             </div>
             <div id="collectionContent"></div>
@@ -278,7 +278,7 @@
         }
 
         async function loadSets() {
-            document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading expansions...</span></div>';
+            document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Cargando expansiones...</span></div>';
             try {
                 const data = await fetchJSON('https://api.pokemontcg.io/v2/sets?pageSize=250&orderBy=-releaseDate');
                 allSets = (data.data || []).map(s => ({
@@ -288,14 +288,14 @@
                 populateSeriesFilter();
                 renderExpansions(allSets);
             } catch (e) {
-                document.getElementById('expansionsContent').innerHTML = `<div class="error-msg">Error loading expansions. ${e.message}</div>`;
+                document.getElementById('expansionsContent').innerHTML = `<div class="error-msg">Error al cargar expansiones. ${e.message}</div>`;
             }
         }
 
         function populateSeriesFilter() {
             const series = [...new Set(allSets.map(s => s.series).filter(Boolean))].sort();
             const sel = document.getElementById('seriesFilter');
-            sel.innerHTML = '<option value="">All Series</option>';
+            sel.innerHTML = '<option value="">Todas las Series</option>';
             series.forEach(s => { sel.innerHTML += `<option value="${s}">${s}</option>`; });
         }
 
@@ -314,7 +314,7 @@
 
         function renderExpansions(sets) {
             const c = document.getElementById('expansionsContent');
-            if (!sets.length) { c.innerHTML = '<div class="empty-state"><h3>No expansions found</h3></div>'; return; }
+            if (!sets.length) { c.innerHTML = '<div class="empty-state"><h3>No se encontraron expansiones</h3></div>'; return; }
             c.innerHTML = `<div class="expansions-grid">${sets.map(set => {
                 const owned = getOwnedCount(set.id);
                 const logo = set.logo;
@@ -325,8 +325,8 @@
                     <div class="expansion-info">
                         <div class="expansion-name">${set.name}</div>
                         <div class="expansion-meta">
-                            <span>${set.total || '?'} cards</span>
-                            ${owned > 0 ? `<span class="expansion-badge">${owned} owned</span>` : ''}
+                            <span>${set.total || '?'} cartas</span>
+                            ${owned > 0 ? `<span class="expansion-badge">${owned} en posesión</span>` : ''}
                         </div>
                     </div>
                 </div>`;
@@ -336,7 +336,7 @@
         async function openSet(setId) {
             const setObj = allSets.find(s => s.id === setId);
             if (!setObj) return;
-            document.getElementById('cardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading cards...</span></div>';
+            document.getElementById('cardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Cargando cartas...</span></div>';
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById('view-cards').classList.add('active');
             document.getElementById('btn-expansions').classList.remove('active');
@@ -389,7 +389,7 @@
                 updateStats();
                 updatePageInfo();
             } catch (e) {
-                document.getElementById('cardsContent').innerHTML = `<div class="error-msg">Error loading cards. ${e.message}</div>`;
+                document.getElementById('cardsContent').innerHTML = `<div class="error-msg">Error al cargar cartas. ${e.message}</div>`;
             }
         }
 
@@ -404,7 +404,7 @@
         function populateRarityFilter() {
             const rarities = [...new Set(allCards.map(c => c.rarity).filter(Boolean))].sort();
             const sel = document.getElementById('rarityFilter');
-            sel.innerHTML = '<option value="">All Rarities</option>';
+            sel.innerHTML = '<option value="">Todas las Rarezas</option>';
             rarities.forEach(r => { sel.innerHTML += `<option value="${r}">${r}</option>`; });
         }
 
@@ -428,7 +428,7 @@
 
         function renderCards() {
             const c = document.getElementById('cardsContent');
-            if (!allCards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
+            if (!allCards.length) { c.innerHTML = '<div class="empty-state"><h3>No se encontraron cartas</h3></div>'; return; }
             const start = (currentPage - 1) * perPage;
             const pageCards = allCards.slice(start, start + perPage);
             c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
@@ -436,19 +436,19 @@
                 const img = getCardImageSrc(card);
                 const fallback = getCardFallbackSrc(card);
                 const price = card.marketPrice;
-                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/A</div>`;
+                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
                     ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
+                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';};">` : `<span class="no-img">Sin imagen</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
                         <div class="card-meta">${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
                     </div>
                     <div class="card-actions">
-                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Quitar</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Agregar</button>`}
                     </div>
                 </div>`;
             }).join('')}</div>`;
@@ -461,11 +461,11 @@
             clearTimeout(globalSearchTimeout);
             const q = document.getElementById('globalCardSearch').value.trim();
             if (!q) {
-                document.getElementById('globalCardsContent').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Type a card name to search</p>';
+                document.getElementById('globalCardsContent').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Escribe un nombre de carta para buscar</p>';
                 return;
             }
             globalSearchTimeout = setTimeout(async () => {
-                document.getElementById('globalCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
+                document.getElementById('globalCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Buscando...</span></div>';
                 try {
                     let all = [], page = 1;
                     while (true) {
@@ -490,35 +490,35 @@
 
         function renderGlobalCards(cards) {
             const c = document.getElementById('globalCardsContent');
-            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
+            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No se encontraron cartas</h3></div>'; return; }
             c.innerHTML = `<div class="cards-grid">${cards.map(card => {
                 const owned = !!collection[card.id];
                 const setName = card.set?.name || card.set?.id || '';
                 const setId = card.set?.id || '';
                 const price = card.marketPrice;
-                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/A</div>`;
+                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}">
                     ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/${setId.toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
+                        ${card.image ? `<img src="${card.image}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.pokemontcg.io/${setId.toLowerCase()}/${(card.number || card.id.split('-').pop()).replace(/^0+/, '') || '1'}.png'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';};">` : `<span class="no-img">Sin imagen</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
                         <div class="card-meta">${setName ? setName + ' ' : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
                     </div>
                     <div class="card-actions">
-                        <button class="remove-btn" onclick="goToCard('${card.id}', '${setId}')" style="margin-bottom:4px;">Go to card</button>
-                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                        <button class="remove-btn" onclick="goToCard('${card.id}', '${setId}')" style="margin-bottom:4px;">Ir a carta</button>
+                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Quitar</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Agregar</button>`}
                     </div>
                 </div>`;
             }).join('')}</div>`;
         }
 
         async function goToCard(cardId, setId) {
-            if (!setId) { toast('Set not found for this card'); return; }
+            if (!setId) { toast('Set no encontrado para esta carta'); return; }
             const targetSet = allSets.find(s => s.id === setId);
-            if (!targetSet) { toast('Set not found'); return; }
+            if (!targetSet) { toast('Set no encontrado'); return; }
             await openSet(targetSet.id);
             setTimeout(() => {
                 const el = document.querySelector(`.card-tcg[data-card-id="${cardId}"]`);
@@ -551,7 +551,7 @@
 
         function renderFilteredCards(cards) {
             const c = document.getElementById('cardsContent');
-            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
+            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>No se encontraron cartas</h3></div>'; return; }
             const start = (currentPage - 1) * perPage;
             const pageCards = cards.slice(start, start + perPage);
             c.innerHTML = `<div class="cards-grid">${pageCards.map(card => {
@@ -559,19 +559,19 @@
                 const img = getCardImageSrc(card);
                 const fallback = getCardFallbackSrc(card);
                 const price = card.marketPrice;
-                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/A</div>`;
+                const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
                 return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${card.id}">
                     ${priceTag}
                     <div class="owned-badge"></div>
                     <div class="card-img-wrap">
-                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>No image</span>';};">` : `<span class="no-img">No image</span>`}
+                        ${img ? `<img src="${img}" alt="${card.name}" loading="lazy" onerror="this.onerror=null; this.src='${fallback}'; this.onerror=function(){this.parentElement.innerHTML='<span class=\\'no-img\\'>Sin imagen</span>';};">` : `<span class="no-img">Sin imagen</span>`}
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
                         <div class="card-meta">${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
                     </div>
                     <div class="card-actions">
-                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Remove</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Add</button>`}
+                        ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Quitar</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Agregar</button>`}
                     </div>
                 </div>`;
             }).join('')}</div>`;
@@ -620,7 +620,7 @@
         function renderCollection() {
             const c = document.getElementById('collectionContent');
             let cards = Object.values(collection);
-            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>Your collection is empty</h3><p>Start by adding cards from the Expansions tab!</p></div>'; updateColStats([]); return; }
+            if (!cards.length) { c.innerHTML = '<div class="empty-state"><h3>Tu colección está vacía</h3><p>¡Empieza agregando cartas desde la pestaña de Expansiones!</p></div>'; updateColStats([]); return; }
             const search = document.getElementById('collectionSearch')?.value.toLowerCase() || '';
             const sort = document.getElementById('collectionSort')?.value || 'dex';
             if (search) cards = cards.filter(x => x.name.toLowerCase().includes(search) || x.set?.name?.toLowerCase().includes(search));
@@ -644,7 +644,7 @@
                         <span class="qty-display">${card.quantity || 1}</span>
                         <button class="qty-btn" onclick="changeQty('${card.id}',1)">+</button>
                     </div>
-                    <button class="del-btn" onclick="removeCard('${card.id}')">Remove</button>
+                    <button class="del-btn" onclick="removeCard('${card.id}')">Eliminar</button>
                 </div>`;
             }).join('')}</div>`;
         }
@@ -679,7 +679,7 @@
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             if (view === 'expansions') {
                 document.getElementById('btn-expansions').classList.add('active');
-                document.getElementById('expansionsTitle').textContent = 'All Expansions';
+                document.getElementById('expansionsTitle').textContent = 'Todas las Expansiones';
             } else if (view === 'collection') {
                 document.getElementById('btn-collection').classList.add('active');
                 renderCollection();
