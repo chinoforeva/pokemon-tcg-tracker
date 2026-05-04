@@ -515,6 +515,13 @@
                     series: getSetSerie(s.id), logo: s.logo ? `${s.logo}.webp` : null,
                     symbol: s.symbol ? `${s.symbol}.webp` : null
                 }));
+                const seen = new Set();
+                allSets = allSets.filter(s => {
+                    const key = s.id.toLowerCase();
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
                 allSets.sort((a, b) => parseSetOrder(a.id) - parseSetOrder(b.id));
                 populateSeriesFilter();
                 renderExpansions(allSets);
