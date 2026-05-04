@@ -50,6 +50,10 @@
         }
         .nav-btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
         .nav-btn.active { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 4px 12px var(--accent-glow); }
+        .lang-switch { display: flex; gap: 0.15rem; background: var(--glass); padding: 0.2rem; border-radius: 10px; border: 1px solid var(--border); }
+        .lang-btn { padding: 0.4rem 0.6rem; background: transparent; border: none; border-radius: 8px; color: var(--text-muted); font-weight: 600; font-size: 0.7rem; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        .lang-btn:hover { color: var(--text-primary); }
+        .lang-btn.active { background: var(--accent); color: white; }
         main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
         .view { display: none; animation: fadeIn 0.3s ease; }
         .view.active { display: block; }
@@ -175,7 +179,7 @@
         .hidden { display: none !important; }
         @media (max-width: 768px) {
             .header-content { flex-direction: column; gap: 0.75rem; }
-            nav { width: 100%; justify-content: center; }
+            nav { width: 100%; justify-content: center; flex-wrap: wrap; }
             main { padding: 1rem; }
             .cards-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
             .collection-item { flex-wrap: wrap; }
@@ -192,6 +196,11 @@
             <nav>
                 <button class="nav-btn" id="btn-expansions" onclick="showView('expansions')">Expansiones</button>
                 <button class="nav-btn" id="btn-collection" onclick="showView('collection')">Mi Colección</button>
+                <div class="lang-switch">
+                    <button class="lang-btn active" data-lang="en" onclick="switchLang('en')">EN</button>
+                    <button class="lang-btn" data-lang="ja" onclick="switchLang('ja')">JP</button>
+                    <button class="lang-btn" data-lang="ko" onclick="switchLang('ko')">KR</button>
+                </div>
             </nav>
         </div>
     </header>
@@ -276,8 +285,9 @@
         </div>
     </main>
     <script>
-        const API = 'https://api.tcgdex.net/v2/en';
-        const ASSETS = 'https://assets.tcgdex.net/en';
+        let currentLang = 'en';
+        function getAPI() { return `https://api.tcgdex.net/v2/${currentLang}`; }
+        function getASSETS() { return `https://assets.tcgdex.net/${currentLang}`; }
 
         async function fetchJSON(url) {
             const r = await fetch(url);
@@ -287,11 +297,11 @@
 
         function cardImageUrl(card, quality = 'low', ext = 'webp') {
             const s = card.set;
-            return `${ASSETS}/${s.serie || s.id.split(/(?=\d)/)[0]}/${s.id}/${card.localId || card.number}.${ext}`;
+            return `${getASSETS()}/${s.serie || s.id.split(/(?=\d)/)[0]}/${s.id}/${card.localId || card.number}.${ext}`;
         }
 
         function cardImageFullUrl(card, quality = 'low', ext = 'webp') {
-            return `${ASSETS}/${card.imageBase || ''}/${quality}.${ext}`;
+            return `${getASSETS()}/${card.imageBase || ''}/${quality}.${ext}`;
         }
 
         const SET_RELEASE_ORDER = {
@@ -308,7 +318,11 @@
             'sm9': 29, 'sm8': 30, 'sm75': 30.5, 'sm7': 31,
             'sm6': 32, 'sm5': 33, 'sm4': 34, 'sm35': 34.5, 'sm3': 35,
             'sm2': 36, 'sm1': 37,
-            'xy': 38, 'xyp': 38.1, 'xy0': 38.2,
+            'sm1m': 37.1, 'sm1s': 37.2, 'sm1+': 37.3, 'sm2k': 37.4, 'sm2l': 37.5,
+            'sm3h': 37.6, 'sm3n': 37.7, 'sm3+': 37.8, 'sm4a': 37.9, 'sm4s': 38.0,
+            'sm4+': 38.05, 'sm5s': 38.06, 'sm5m': 38.07, 'sm5+': 38.08, 'sm6a': 38.09,
+            'sm6b': 38.1, 'sm7a': 38.11, 'sm7b': 38.12, 'sm7c': 38.13,
+            'xy': 38.2, 'xyp': 38.3, 'xy0': 38.4,
             'xy14': 39, 'xy13': 40, 'xy12': 41, 'xy11': 42,
             'xy10': 43, 'xy9': 44, 'xy8': 45, 'xy7': 46,
             'xy6': 47, 'xy5': 48, 'xy4': 49, 'xy3': 50,
@@ -321,7 +335,7 @@
             'col1': 69.5,
             'pl': 70, 'pl1': 71, 'pl2': 72, 'pl3': 73, 'pl4': 74,
             'dp': 75, 'dp1': 76, 'dp2': 77, 'dp3': 78, 'dp4': 79,
-            'dp5': 80, 'dp6': 81, 'dp7': 82,
+            'dp5': 80, 'dp6': 81, 'dp7': 82, 'dpt': 82.5,
             'ex': 83, 'ex1': 84, 'ex2': 85, 'ex3': 86, 'ex4': 87,
             'ex5': 88, 'ex6': 89, 'ex7': 90, 'ex8': 91,
             'ex9': 92, 'ex10': 93, 'ex11': 94, 'ex12': 95,
@@ -335,7 +349,15 @@
             'pop': 117, 'si': 118, 'np': 119,
             'mc': 120, 'fut': 121,
             'me01': 0.5, 'me02': 0.4, 'me02.5': 0.3, 'me03': 0.2, 'mee': 0.1, 'mep': 0.15,
-            'b1': 0.6, 'b1a': 0.55, 'b2': 0.5, 'b2a': 0.45
+            'b1': 0.6, 'b1a': 0.55, 'b2': 0.5, 'b2a': 0.45,
+            'pmcg': 200, 'pmcg1': 201, 'pmcg2': 202, 'pmcg3': 203, 'pmcg4': 204,
+            'pmcg5': 205, 'pmcg6': 206, 'pmcg7': 207, 'pmcg8': 208,
+            'pmc': 200,
+            'vs': 210, 'vs1': 211,
+            'e': 220, 'e1': 221, 'e2': 222, 'e3': 223, 'e4': 224, 'e5': 225,
+            'adv': 230, 'adv1': 231, 'adv2': 232, 'adv3': 233, 'adv4': 234,
+            'adv5': 235, 'pcg': 240, 'pcg1': 241, 'pcg2': 242,
+            'web1': 250
         };
 
         function parseSetOrder(setId) {
@@ -402,7 +424,7 @@
 
         async function fetchCardPricing(cardId) {
             if (pricingCache[cardId]) return pricingCache[cardId];
-            const data = await fetchJSON(`${API}/cards/${encodeURIComponent(cardId)}`);
+            const data = await fetchJSON(`${getAPI()}/cards/${encodeURIComponent(cardId)}`);
             pricingCache[cardId] = data?.pricing || null;
             return pricingCache[cardId];
         }
@@ -487,7 +509,7 @@
         async function loadSets() {
             document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Cargando expansiones...</span></div>';
             try {
-                const rawSets = await fetchJSON(`${API}/sets`);
+                const rawSets = await fetchJSON(`${getAPI()}/sets`);
                 allSets = rawSets.map(s => ({
                     id: s.id, name: s.name, total: s.cardCount?.total || 0, official: s.cardCount?.official || 0,
                     series: getSetSerie(s.id), logo: s.logo ? `${s.logo}.webp` : null,
@@ -555,7 +577,7 @@
             document.getElementById('rarityFilter').innerHTML = '<option value="">Todas las Rarezas</option>';
             currentSet = setObj;
             try {
-                const rawCards = await fetchJSON(`${API}/cards?set=${setId}`);
+                const rawCards = await fetchJSON(`${getAPI()}/cards?set=${setId}`);
                 allCards = rawCards.map(c => buildCardBrief(c));
                 allCards.sort((a, b) => {
                     const da = a.dexId || 9999, db = b.dexId || 9999;
@@ -618,7 +640,7 @@
             globalSearchTimeout = setTimeout(async () => {
                 document.getElementById('globalCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Buscando...</span></div>';
                 try {
-                    const rawCards = await fetchJSON(`${API}/cards?name=${encodeURIComponent(q)}`);
+                    const rawCards = await fetchJSON(`${getAPI()}/cards?name=${encodeURIComponent(q)}`);
                     globalSearchCards = rawCards.map(c => buildCardBrief(c));
                     renderGlobalCards(globalSearchCards);
                 } catch (e) {
@@ -818,6 +840,24 @@
             document.getElementById('cards-mode').style.display = mode === 'cards' ? '' : 'none';
             document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(`btn-mode-${mode}`).classList.add('active');
+        }
+
+        function switchLang(lang) {
+            if (lang === currentLang) return;
+            currentLang = lang;
+            pricingCache = {};
+            allSets = [];
+            allCards = [];
+            currentSet = null;
+            document.querySelectorAll('.lang-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.lang === lang);
+            });
+            document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Cargando expansiones...</span></div>';
+            document.getElementById('globalCardsContent').innerHTML = '';
+            document.getElementById('globalCardSearch').value = '';
+            showView('expansions');
+            setMode('sets');
+            loadSets();
         }
 
         async function loadDex() {
