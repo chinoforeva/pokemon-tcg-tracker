@@ -510,7 +510,7 @@
             document.getElementById('expansionsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Cargando expansiones...</span></div>';
             try {
                 const rawSets = await fetchJSON(`${getAPI()}/sets`);
-                allSets = rawSets.map(s => ({
+                allSets = rawSets.filter(s => s.cardCount?.total > 0).map(s => ({
                     id: s.id, name: s.name, total: s.cardCount?.total || 0, official: s.cardCount?.official || 0,
                     series: getSetSerie(s.id), logo: s.logo ? `${s.logo}.webp` : null,
                     symbol: s.symbol ? `${s.symbol}.webp` : null
