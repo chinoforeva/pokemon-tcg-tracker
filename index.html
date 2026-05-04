@@ -307,10 +307,27 @@
             return null;
         }
 
+        function extractSetIdFromCardId(cardId) {
+            const m = cardId.match(/^([a-zA-Z0-9.]+(?:-[a-zA-Z0-9.]+)?)\s*-/);
+            return m ? m[1] : '';
+        }
+
+        function findSetById(setId) {
+            if (!setId) return null;
+            return allSets.find(s => s.id === setId) || null;
+        }
+
         function buildCardBrief(raw) {
+            let setId = raw.set?.id || '';
+            let setName = raw.set?.name || '';
+            if (!setId && raw.id) {
+                setId = extractSetIdFromCardId(raw.id);
+                const found = findSetById(setId);
+                if (found) { setName = found.name; }
+            }
             return {
-                id: raw.id, name: raw.name, number: raw.localId, rarity: raw.rarity,
-                set: { id: raw.set?.id || '', name: raw.set?.name || '', serie: getSetSerie(raw.set?.id || '') },
+                id: raw.id, name: raw.name, number: raw.localId || raw.number || '', rarity: raw.rarity || '',
+                set: { id: setId, name: setName, serie: getSetSerie(setId) },
                 dexId: raw.dexId?.[0] || null,
                 image: raw.image ? `${raw.image}/low.webp` : null,
                 imageLarge: raw.image ? `${raw.image}/high.webp` : null,
@@ -477,6 +494,7 @@
                 const setId = card.set?.id || '';
                 const price = card.marketPrice;
                 const priceTag = price != null ? `<div class="price-tag">$${price.toFixed(2)}</div>` : `<div class="price-tag no-price">N/D</div>`;
+                const setBtn = setId ? `<button class="remove-btn" onclick="goToSet('${setId}')" style="margin-bottom:4px;background:#555;">Ver set</button>` : '';
                 return `<div class="card-tcg ${owned ? 'owned' : ''}">
                     ${priceTag}
                     <div class="owned-badge"></div>
@@ -485,9 +503,10 @@
                     </div>
                     <div class="card-details">
                         <div class="card-name">${card.name}</div>
-                        <div class="card-meta">${setName ? setName + ' ' : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
+                        <div class="card-meta">${setName ? `<span style="cursor:pointer;text-decoration:underline;" onclick="goToSet('${setId}')">${setName}</span> ` : ''}${card.rarity ? card.rarity + ' ' : ''}#${card.number || ''}</div>
                     </div>
                     <div class="card-actions">
+                        ${setBtn}
                         <button class="remove-btn" onclick="goToCard('${card.id}', '${setId}')" style="margin-bottom:4px;">Ir a carta</button>
                         ${owned ? `<button class="remove-btn" onclick="toggleCard('${card.id}')">Quitar</button>` : `<button class="add-btn" onclick="toggleCard('${card.id}')">+ Agregar</button>`}
                     </div>
@@ -495,10 +514,23 @@
             }).join('')}</div>`;
         }
 
+        function goToSet(setId) {
+            if (!setId) { toast('Set no encontrado'); return; }
+            const targetSet = findSetById(setId);
+            if (!targetSet) { toast('Set "' + setId + '" no encontrado en las expansiones cargadas'); return; }
+            openSet(targetSet.id);
+        }
+
         async function goToCard(cardId, setId) {
-            if (!setId) { toast('Set no encontrado para esta carta'); return; }
-            const targetSet = allSets.find(s => s.id === setId);
-            if (!targetSet) { toast('Set no encontrado'); return; }
+            if (!setId) {
+                setId = extractSetIdFromCardId(cardId);
+            }
+            if (!setId) { toast('No se pudo determinar el set de esta carta'); return; }
+            let targetSet = findSetById(setId);
+            if (!targetSet) {
+                toast('Set "' + setId + '" no encontrado. Puede que necesites esperar a que carguen las expansiones.');
+                return;
+            }
             await openSet(targetSet.id);
             setTimeout(() => {
                 const el = document.querySelector(`.card-tcg[data-card-id="${cardId}"]`);
@@ -506,8 +538,10 @@
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     el.style.boxShadow = '0 0 0 3px var(--accent), 0 0 30px var(--accent-glow)';
                     setTimeout(() => { el.style.boxShadow = ''; }, 2000);
+                } else {
+                    toast('Set cargado, pero la carta no está en la primera página. Usa el buscador.');
                 }
-            }, 500);
+            }, 800);
         }
 
         function toast(msg) {
