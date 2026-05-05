@@ -469,15 +469,41 @@
         let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache') || '{}');
         let openPriceDropdown = null;
         let searchTimeout = null;
-        let rateLimitRemaining = 200;
-        let rateLimitMax = 200;
+        let rateLimitRemaining = parseInt(localStorage.getItem('chiniRateLimitRemaining') || '200');
+        let rateLimitMax = parseInt(localStorage.getItem('chiniRateLimitMax') || '200');
+        let rateLimitResetAt = parseInt(localStorage.getItem('chiniRateLimitResetAt') || '0');
 
         async function apiFetch(endpoint) {
+            const now = Date.now();
+            if (rateLimitResetAt && now > rateLimitResetAt) {
+                rateLimitRemaining = 200;
+                rateLimitResetAt = 0;
+            }
+            if (rateLimitRemaining <= 0) {
+                const resetTime = rateLimitResetAt || (now + 86400000);
+                const minsLeft = Math.ceil((resetTime - now) / 60000);
+                throw new Error(`Rate limit exceeded. Resets in ~${minsLeft} min.`);
+            }
             const r = await fetch(`${API_BASE}${endpoint}`, {
                 headers: { 'X-API-Key': API_KEY }
             });
-            rateLimitRemaining = parseInt(r.headers.get('X-RateLimit-Remaining') || '0');
-            rateLimitMax = parseInt(r.headers.get('X-RateLimit-Limit') || '200');
+            const remaining = r.headers.get('X-RateLimit-Remaining');
+            const limit = r.headers.get('X-RateLimit-Limit');
+            const retryAfter = r.headers.get('Retry-After');
+            if (remaining != null) {
+                rateLimitRemaining = parseInt(remaining);
+            }
+            if (limit != null) {
+                rateLimitMax = parseInt(limit);
+            }
+            if (retryAfter) {
+                rateLimitResetAt = now + parseInt(retryAfter) * 1000;
+            } else if (rateLimitRemaining <= 0) {
+                rateLimitResetAt = now + 86400000;
+            }
+            localStorage.setItem('chiniRateLimitRemaining', rateLimitRemaining);
+            localStorage.setItem('chiniRateLimitMax', rateLimitMax);
+            if (rateLimitResetAt) localStorage.setItem('chiniRateLimitResetAt', rateLimitResetAt);
             updateRateLimitBar();
             if (!r.ok) {
                 const err = await r.json().catch(() => ({}));
@@ -491,6 +517,7 @@
             const bar = document.getElementById('rateLimitBar');
             bar.style.width = pct + '%';
             bar.style.background = pct > 50 ? 'var(--success)' : pct > 20 ? 'var(--warning)' : 'var(--accent)';
+            bar.title = `${rateLimitRemaining} / ${rateLimitMax} requests remaining`;
         }
 
         function fmt(n) {
