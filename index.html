@@ -1116,8 +1116,8 @@
                     }));
                 const dedupedMap = {};
                 for (const c of all) {
-                    const key = c.number;
-                    if (!dedupedMap[key] || c.variant === 'Normal') {
+                    const key = c.image;
+                    if (!dedupedMap[key]) {
                         dedupedMap[key] = c;
                     }
                 }
@@ -1236,8 +1236,8 @@
                         }));
                     const dedupedMap = {};
                     for (const c of all) {
-                        const key = c.setName + '-' + c.number;
-                        if (!dedupedMap[key] || c.variant === 'Normal') {
+                        const key = c.image;
+                        if (!dedupedMap[key]) {
                             dedupedMap[key] = c;
                         }
                     }
