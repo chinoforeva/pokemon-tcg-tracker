@@ -582,7 +582,13 @@
                 const items = resp.data || [];
                 all = all.concat(items);
                 offset += 100;
-                hasMore = items.length >= 100 && (resp.total == null || all.length < resp.total);
+                if (items.length < 100) {
+                    hasMore = false;
+                } else if (resp.total != null) {
+                    hasMore = all.length < resp.total;
+                } else {
+                    hasMore = false;
+                }
             }
             return all;
         }
