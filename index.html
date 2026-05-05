@@ -560,12 +560,14 @@
             let hasMore = true;
             while (hasMore) {
                 const sep = endpoint.includes('?') ? '&' : '?';
-                const resp = await apiFetch(`${endpoint}${sep}limit=500&offset=${offset}`);
+                const resp = await apiFetch(`${endpoint}${sep}limit=100&offset=${offset}`);
                 const items = resp.data || [];
                 all = all.concat(items);
-                offset += 500;
-                hasMore = items.length === 500;
+                offset += 100;
+                hasMore = items.length >= 100 && (resp.total == null || all.length < resp.total);
             }
+            return all;
+        }
             return all;
         }
 
