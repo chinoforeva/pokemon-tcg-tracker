@@ -231,6 +231,20 @@
         .toggle-excluded-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
         .card-tcg.excluded { opacity: 0.5; }
         .card-tcg.excluded:hover { opacity: 0.8; }
+        .pagination {
+            display: flex; justify-content: center; align-items: center; gap: 0.5rem;
+            margin-top: 2rem; flex-wrap: wrap;
+        }
+        .pagination-btn {
+            padding: 0.5rem 0.85rem; background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; color: var(--text-secondary); font-weight: 500; font-size: 0.78rem;
+            cursor: pointer; transition: all 0.25s; font-family: inherit; min-width: 36px; text-align: center;
+        }
+        .pagination-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text-primary); }
+        .pagination-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .pagination-btn:disabled { opacity: 0.3; cursor: default; }
+        .pagination-ellipsis { color: var(--text-muted); font-size: 0.78rem; padding: 0 0.25rem; }
+        .pagination-info { font-size: 0.72rem; color: var(--text-muted); margin-left: 0.5rem; }
         .collection-sort { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: var(--text-secondary); }
         .collection-sort select { padding: 0.5rem 2rem 0.5rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-size: 0.78rem; cursor: pointer; font-family: inherit; transition: all 0.2s; }
         .collection-sort select:hover { border-color: var(--border-hover); }
@@ -383,6 +397,7 @@
                 </select>
             </div>
             <div id="setCardsContent"></div>
+            <div class="pagination" id="setPagination"></div>
         </div>
         <div id="view-search" class="view">
             <div class="section-header">
@@ -443,8 +458,11 @@
         let allSets = [];
         let currentSet = null;
         let currentSetCards = [];
+        let allCardsForSet = [];
         let excludedCards = [];
         let showExcluded = false;
+        let currentPage = 1;
+        let cardsPerPage = 100;
         let searchResults = [];
         let collection = JSON.parse(localStorage.getItem('chiniCollection') || '{}');
         let pricingCache = JSON.parse(localStorage.getItem('chiniPricing') || '{}');
@@ -1151,6 +1169,8 @@
                     if (a.dexId && b.dexId && a.dexId !== b.dexId) return a.dexId - b.dexId;
                     return parseInt(getCardBaseNumber(a.number) || 0) - parseInt(getCardBaseNumber(b.number) || 0);
                 });
+                allCardsForSet = currentSetCards.concat(excludedCards);
+                currentPage = 1;
                 showExcluded = false;
                 const toggleBtn = document.getElementById('toggleExcludedBtn');
                 if (excludedCards.length > 0) {
@@ -1162,11 +1182,56 @@
                 const setName = currentSetCards[0]?.setName || setSlug;
                 document.getElementById('setCardsTitle').textContent = setName;
                 populateSetFilters();
-                renderSetCards(currentSetCards);
-                updateSetStats();
+                renderSetPage();
             } catch (e) {
                 document.getElementById('setCardsContent').innerHTML = `<div class="error-msg">${e.message}</div>`;
             }
+        }
+
+        function renderSetPage() {
+            const cards = showExcluded ? allCardsForSet : currentSetCards;
+            const totalPages = Math.ceil(cards.length / cardsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+            const start = (currentPage - 1) * cardsPerPage;
+            const end = start + cardsPerPage;
+            const pageCards = cards.slice(start, end);
+            renderSetCards(pageCards);
+            updateSetStats(showExcluded ? cards : currentSetCards);
+            renderPagination(totalPages);
+        }
+
+        function renderPagination(totalPages) {
+            const el = document.getElementById('setPagination');
+            if (totalPages <= 1) { el.innerHTML = ''; return; }
+            let html = `<button class="pagination-btn" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>‹</button>`;
+            const range = 2;
+            const pages = [];
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+                    pages.push(i);
+                } else if (pages[pages.length - 1] !== '...') {
+                    pages.push('...');
+                }
+            }
+            for (const p of pages) {
+                if (p === '...') {
+                    html += '<span class="pagination-ellipsis">…</span>';
+                } else {
+                    html += `<button class="pagination-btn ${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+                }
+            }
+            html += `<button class="pagination-btn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>›</button>`;
+            html += `<span class="pagination-info">${currentSetCards.length + excludedCards.length} cards · ${totalPages} pages</span>`;
+            el.innerHTML = html;
+        }
+
+        function goToPage(p) {
+            const cards = showExcluded ? allCardsForSet : currentSetCards;
+            const totalPages = Math.ceil(cards.length / cardsPerPage) || 1;
+            if (p < 1 || p > totalPages) return;
+            currentPage = p;
+            renderSetPage();
+            document.getElementById('setCardsContent').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function toggleExcludedCards() {
@@ -1175,14 +1240,12 @@
             btn.classList.toggle('active', showExcluded);
             if (showExcluded) {
                 document.getElementById('toggleExcludedText').textContent = 'Hide excluded';
-                renderSetCards(currentSetCards.concat(excludedCards));
-                updateSetStats(currentSetCards.concat(excludedCards));
             } else {
                 const text = excludedCards.length > 0 ? `Show excluded (${excludedCards.length})` : 'Show excluded';
                 document.getElementById('toggleExcludedText').textContent = text;
-                renderSetCards(currentSetCards);
-                updateSetStats(currentSetCards);
             }
+            currentPage = 1;
+            renderSetPage();
         }
 
         function populateSetFilters() {
@@ -1193,12 +1256,18 @@
         function filterSetCards() {
             const q = document.getElementById('setCardSearch').value.toLowerCase();
             const rarity = document.getElementById('rarityFilter').value;
-            const filtered = currentSetCards.filter(c => {
+            const baseCards = showExcluded ? allCardsForSet : currentSetCards;
+            const filtered = baseCards.filter(c => {
                 return (!q || c.name.toLowerCase().includes(q) || c.number.toLowerCase().includes(q))
                     && (!rarity || c.rarity === rarity);
             });
-            renderSetCards(filtered);
-            updateSetStats(filtered);
+            if (q || rarity) {
+                renderSetCards(filtered);
+                updateSetStats(filtered);
+                document.getElementById('setPagination').innerHTML = `<span class="pagination-info">${filtered.length} of ${baseCards.length} cards (filtered)</span>`;
+            } else {
+                renderSetPage();
+            }
         }
 
         function renderSetCards(cards) {
