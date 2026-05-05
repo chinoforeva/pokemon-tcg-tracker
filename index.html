@@ -1108,7 +1108,7 @@
             showView('set-cards');
             try {
                 const cards = await paginatedFetch(`/cards/search?game=pokemon&set=${encodeURIComponent(setSlug)}`);
-                const all = cards.filter(c => hasCardNumber(c.number) && getDexId(c.name))
+                    const all = cards.filter(c => c.name && c.number && c.rarity && c.variant)
                     .map(c => ({
                         id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
                         number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
@@ -1228,7 +1228,7 @@
             searchTimeout = setTimeout(async () => {
                 try {
                     const cards = await paginatedFetch(`/cards/search?q=${encodeURIComponent(q)}&game=pokemon`);
-                    const all = cards.filter(c => hasCardNumber(c.number) && getDexId(c.name))
+                const all = cards.filter(c => c.name && c.number && c.rarity && c.variant)
                         .map(c => ({
                             id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
                             number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
