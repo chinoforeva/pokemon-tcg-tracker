@@ -1116,7 +1116,7 @@
                     }));
                 const dedupedMap = {};
                 for (const c of all) {
-                    const key = c.image;
+                    const key = c.image + '|' + c.variant;
                     if (!dedupedMap[key]) {
                         dedupedMap[key] = c;
                     }
@@ -1180,7 +1180,7 @@
                 </div>
                 <div class="card-details">
                     <div class="card-name">${c.name}</div>
-                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}</div>
+                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}${c.variant && c.variant !== 'Normal' ? ' · ' + c.variant : ''}</div>
                 </div>
                 ${showActions ? `<div class="card-actions">${owned
                     ? `<button class="remove-btn" onclick="toggleCard('${c.id}')">Remove</button>`
@@ -1203,7 +1203,7 @@
                 </div>
                 <div class="card-details">
                     <div class="card-name">${c.name}</div>
-                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.setName || ''} ${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}</div>
+                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.setName || ''} ${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}${c.variant && c.variant !== 'Normal' ? ' · ' + c.variant : ''}</div>
                 </div>
                 <div class="card-actions">
                     ${owned
@@ -1236,7 +1236,7 @@
                         }));
                     const dedupedMap = {};
                     for (const c of all) {
-                        const key = c.image;
+                        const key = c.image + '|' + c.variant;
                         if (!dedupedMap[key]) {
                             dedupedMap[key] = c;
                         }
