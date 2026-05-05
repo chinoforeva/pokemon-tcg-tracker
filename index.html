@@ -222,6 +222,15 @@
         .back-link:hover { color: var(--text-primary); }
         .back-link svg { transition: transform 0.2s; }
         .back-link:hover svg { transform: translateX(-3px); }
+        .toggle-excluded-btn {
+            padding: 0.5rem 1rem; background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; color: var(--text-secondary); font-weight: 500; font-size: 0.78rem;
+            cursor: pointer; transition: all 0.25s; font-family: inherit;
+        }
+        .toggle-excluded-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+        .toggle-excluded-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+        .card-tcg.excluded { opacity: 0.5; }
+        .card-tcg.excluded:hover { opacity: 0.8; }
         .collection-sort { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: var(--text-secondary); }
         .collection-sort select { padding: 0.5rem 2rem 0.5rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-size: 0.78rem; cursor: pointer; font-family: inherit; transition: all 0.2s; }
         .collection-sort select:hover { border-color: var(--border-hover); }
@@ -356,6 +365,9 @@
             </button>
             <div class="section-header">
                 <h2 class="section-title" id="setCardsTitle"></h2>
+                <button class="toggle-excluded-btn" id="toggleExcludedBtn" onclick="toggleExcludedCards()" style="display:none;">
+                    <span id="toggleExcludedText">Show excluded</span>
+                </button>
             </div>
             <div class="stats-row">
                 <div class="stat-card"><div class="stat-value" id="setTotalCards">0</div><div class="stat-label">Total Cards</div></div>
@@ -431,6 +443,8 @@
         let allSets = [];
         let currentSet = null;
         let currentSetCards = [];
+        let excludedCards = [];
+        let showExcluded = false;
         let searchResults = [];
         let collection = JSON.parse(localStorage.getItem('chiniCollection') || '{}');
         let pricingCache = JSON.parse(localStorage.getItem('chiniPricing') || '{}');
@@ -1108,14 +1122,22 @@
             showView('set-cards');
             try {
                 const cards = await paginatedFetch(`/cards/search?game=pokemon&set=${encodeURIComponent(setSlug)}`);
-                    const all = cards.filter(c => c.name && c.number && c.rarity && c.variant)
-                    .map(c => ({
-                        id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
-                        number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
-                        image: c.image_url || '', setId: c.set?.id || '',
-                        setName: c.set?.name || '', prices: c.prices || null,
-                        updatedAt: c.updated_at || null, dexId: getDexId(c.name)
-                    }));
+                    const valid = cards.filter(c => c.name && c.number && c.rarity && c.variant);
+                const excluded = cards.filter(c => !(c.name && c.number && c.rarity && c.variant));
+                const all = valid.map(c => ({
+                    id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
+                    number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
+                    image: c.image_url || '', setId: c.set?.id || '',
+                    setName: c.set?.name || '', prices: c.prices || null,
+                    updatedAt: c.updated_at || null, dexId: getDexId(c.name)
+                }));
+                excludedCards = excluded.map(c => ({
+                    id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name || 'Unknown',
+                    number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
+                    image: c.image_url || '', setId: c.set?.id || '',
+                    setName: c.set?.name || '', prices: c.prices || null,
+                    updatedAt: c.updated_at || null, dexId: getDexId(c.name)
+                })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 const dedupedMap = {};
                 for (const c of all) {
                     const key = c.image + '|' + c.variant;
@@ -1127,13 +1149,36 @@
                     if (a.dexId && b.dexId && a.dexId !== b.dexId) return a.dexId - b.dexId;
                     return parseInt(getCardBaseNumber(a.number) || 0) - parseInt(getCardBaseNumber(b.number) || 0);
                 });
-                const setName = currentSetCards[0]?.setName || setSlug;
+                showExcluded = false;
+                const toggleBtn = document.getElementById('toggleExcludedBtn');
+                if (excludedCards.length > 0) {
+                    toggleBtn.style.display = 'inline-flex';
+                    document.getElementById('toggleExcludedText').textContent = `Show excluded (${excludedCards.length})`;
+                } else {
+                    toggleBtn.style.display = 'none';
+                }
                 document.getElementById('setCardsTitle').textContent = setName;
                 populateSetFilters();
                 renderSetCards(currentSetCards);
                 updateSetStats();
             } catch (e) {
                 document.getElementById('setCardsContent').innerHTML = `<div class="error-msg">${e.message}</div>`;
+            }
+        }
+
+        function toggleExcludedCards() {
+            showExcluded = !showExcluded;
+            const btn = document.getElementById('toggleExcludedBtn');
+            btn.classList.toggle('active', showExcluded);
+            if (showExcluded) {
+                document.getElementById('toggleExcludedText').textContent = 'Hide excluded';
+                renderSetCards(currentSetCards.concat(excludedCards));
+                updateSetStats(currentSetCards.concat(excludedCards));
+            } else {
+                const text = excludedCards.length > 0 ? `Show excluded (${excludedCards.length})` : 'Show excluded';
+                document.getElementById('toggleExcludedText').textContent = text;
+                renderSetCards(currentSetCards);
+                updateSetStats(currentSetCards);
             }
         }
 
@@ -1156,7 +1201,11 @@
         function renderSetCards(cards) {
             const el = document.getElementById('setCardsContent');
             if (!cards.length) { el.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            el.innerHTML = `<div class="cards-grid">${cards.map(c => cardHTML(c)).join('')}</div>`;
+            const excludedIds = new Set(excludedCards.map(c => c.id));
+            el.innerHTML = `<div class="cards-grid">${cards.map(c => {
+                const isExcluded = excludedIds.has(c.id);
+                return cardHTML(c, true, isExcluded);
+            }).join('')}</div>`;
         }
 
         function updateSetStats(cards) {
@@ -1168,12 +1217,12 @@
             document.getElementById('setProgress').textContent = total ? Math.round(owned / total * 100) + '%' : '0%';
         }
 
-        function cardHTML(c, showActions = true) {
+        function cardHTML(c, showActions = true, isExcluded = false) {
             const owned = !!collection[c.id];
             const img = c.image;
             const safeName = c.name.replace(/'/g, "\\'");
             const dexStr = c.dexId ? '#' + String(c.dexId).padStart(3, '0') : '';
-            return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${c.id}">
+            return `<div class="card-tcg ${owned ? 'owned' : ''} ${isExcluded ? 'excluded' : ''}" data-card-id="${c.id}">
                 <button class="price-btn" onclick="togglePrice('${c.id}', event)">$</button>
                 <div class="price-dropdown" data-card-id="${c.id}"><div class="price-row"><span class="price-label">Loading...</span></div></div>
                 <div class="owned-badge"></div>
