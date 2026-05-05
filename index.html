@@ -262,13 +262,13 @@
         .card-modal {
             display: none; position: fixed; inset: 0; z-index: 10000;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
-            align-items: center; justify-content: center; padding: 2rem;
-            animation: modalBgIn 0.25s ease;
+            align-items: flex-start; justify-content: center; padding: 2rem 2rem;
+            overflow-y: auto; animation: modalBgIn 0.25s ease;
         }
         .card-modal.show { display: flex; }
         @keyframes modalBgIn { from { opacity: 0; } to { opacity: 1; } }
         .card-modal-inner {
-            position: relative; max-width: 420px; width: 100%;
+            position: relative; max-width: 420px; width: 100%; margin: 2rem auto;
             animation: modalIn 0.3s cubic-bezier(0.4,0,0.2,1);
         }
         @keyframes modalIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
@@ -281,11 +281,12 @@
         }
         .card-modal-close:hover { background: var(--accent); color: white; border-color: var(--accent); }
         .card-modal-img {
-            width: 100%; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
+            width: 100%; max-height: 60vh; object-fit: contain; border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
             display: block;
         }
         .card-modal-info {
-            text-align: center; margin-top: 1.2rem;
+            text-align: center; margin-top: 1rem; padding: 0 0.5rem;
         }
         .card-modal-name { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.3rem; }
         .card-modal-meta { font-size: 0.82rem; color: var(--text-muted); }
@@ -304,8 +305,9 @@
         }
         @media (max-width: 768px) {
             .card-modal { padding: 1rem; }
-            .card-modal-inner { max-width: 90vw; }
+            .card-modal-inner { max-width: 92vw; margin: 1.5rem auto; }
             .card-modal-close { top: -38px; right: -4px; }
+            .card-modal-img { max-height: 50vh; }
             .header-content { flex-direction: column; gap: 0.6rem; }
             nav { width: 100%; justify-content: center; flex-wrap: wrap; gap: 0.3rem; }
             main { padding: 1.2rem 0.8rem 3rem; }
@@ -366,9 +368,6 @@
                 </div>
                 <select class="filter-select" id="rarityFilter" onchange="filterSetCards()">
                     <option value="">All Rarities</option>
-                </select>
-                <select class="filter-select" id="variantFilter" onchange="filterSetCards()">
-                    <option value="">All Variants</option>
                 </select>
             </div>
             <div id="setCardsContent"></div>
@@ -1091,6 +1090,15 @@
             }).join('')}</div>`;
         }
 
+        function hasCardNumber(number) {
+            return number && /^\d+\/\d+$/.test(number);
+        }
+
+        function getCardBaseNumber(number) {
+            if (!number || !hasCardNumber(number)) return '';
+            return number.split('/')[0].replace(/^0+/, '') || '0';
+        }
+
         async function openSet(setId, setSlug) {
             currentSet = { id: setId, slug: setSlug };
             document.getElementById('setCardsTitle').textContent = 'Loading...';
@@ -1098,13 +1106,25 @@
             showView('set-cards');
             try {
                 const cards = await paginatedFetch(`/cards/search?game=pokemon&set=${encodeURIComponent(setSlug)}`);
-                currentSetCards = cards.map(c => ({
-                    id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
-                    number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
-                    image: c.image_url || '', setId: c.set?.id || '',
-                    setName: c.set?.name || '', prices: c.prices || null,
-                    updatedAt: c.updated_at || null
-                }));
+                const all = cards.filter(c => hasCardNumber(c.number) && getDexId(c.name))
+                    .map(c => ({
+                        id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
+                        number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
+                        image: c.image_url || '', setId: c.set?.id || '',
+                        setName: c.set?.name || '', prices: c.prices || null,
+                        updatedAt: c.updated_at || null, dexId: getDexId(c.name)
+                    }));
+                const dedupedMap = {};
+                for (const c of all) {
+                    const key = c.number;
+                    if (!dedupedMap[key] || c.variant === 'Normal') {
+                        dedupedMap[key] = c;
+                    }
+                }
+                currentSetCards = Object.values(dedupedMap).sort((a, b) => {
+                    if (a.dexId && b.dexId && a.dexId !== b.dexId) return a.dexId - b.dexId;
+                    return parseInt(getCardBaseNumber(a.number) || 0) - parseInt(getCardBaseNumber(b.number) || 0);
+                });
                 const setName = currentSetCards[0]?.setName || setSlug;
                 document.getElementById('setCardsTitle').textContent = setName;
                 populateSetFilters();
@@ -1118,18 +1138,14 @@
         function populateSetFilters() {
             const rarities = [...new Set(currentSetCards.map(c => c.rarity).filter(Boolean))].sort();
             document.getElementById('rarityFilter').innerHTML = '<option value="">All Rarities</option>' + rarities.map(r => `<option value="${r}">${r}</option>`).join('');
-            const variants = [...new Set(currentSetCards.map(c => c.variant).filter(Boolean))].sort();
-            document.getElementById('variantFilter').innerHTML = '<option value="">All Variants</option>' + variants.map(v => `<option value="${v}">${v}</option>`).join('');
         }
 
         function filterSetCards() {
             const q = document.getElementById('setCardSearch').value.toLowerCase();
             const rarity = document.getElementById('rarityFilter').value;
-            const variant = document.getElementById('variantFilter').value;
             const filtered = currentSetCards.filter(c => {
                 return (!q || c.name.toLowerCase().includes(q) || c.number.toLowerCase().includes(q))
-                    && (!rarity || c.rarity === rarity)
-                    && (!variant || c.variant === variant);
+                    && (!rarity || c.rarity === rarity);
             });
             renderSetCards(filtered);
             updateSetStats(filtered);
@@ -1152,10 +1168,9 @@
 
         function cardHTML(c, showActions = true) {
             const owned = !!collection[c.id];
-            const price = fmt(getBestPrice(c.prices));
             const img = c.image;
             const safeName = c.name.replace(/'/g, "\\'");
-            const variantTag = c.variant && c.variant !== 'Normal' ? `<span class="variant-tag">${c.variant}</span>` : '';
+            const dexStr = c.dexId ? '#' + String(c.dexId).padStart(3, '0') : '';
             return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${c.id}">
                 <button class="price-btn" onclick="togglePrice('${c.id}', event)">$</button>
                 <div class="price-dropdown" data-card-id="${c.id}"><div class="price-row"><span class="price-label">Loading...</span></div></div>
@@ -1165,7 +1180,7 @@
                 </div>
                 <div class="card-details">
                     <div class="card-name">${c.name}</div>
-                    <div class="card-meta">${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''} ${variantTag}${price ? ' · ' + price : ''}</div>
+                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}</div>
                 </div>
                 ${showActions ? `<div class="card-actions">${owned
                     ? `<button class="remove-btn" onclick="toggleCard('${c.id}')">Remove</button>`
@@ -1178,7 +1193,7 @@
             const owned = !!collection[c.id];
             const img = c.image;
             const safeName = c.name.replace(/'/g, "\\'");
-            const variantTag = c.variant && c.variant !== 'Normal' ? `<span class="variant-tag">${c.variant}</span>` : '';
+            const dexStr = c.dexId ? '#' + String(c.dexId).padStart(3, '0') : '';
             return `<div class="card-tcg ${owned ? 'owned' : ''}">
                 <button class="price-btn" onclick="togglePrice('${c.id}', event)">$</button>
                 <div class="price-dropdown" data-card-id="${c.id}"><div class="price-row"><span class="price-label">Loading...</span></div></div>
@@ -1188,7 +1203,7 @@
                 </div>
                 <div class="card-details">
                     <div class="card-name">${c.name}</div>
-                    <div class="card-meta">${c.setName || ''} ${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''} ${variantTag}</div>
+                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.setName || ''} ${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}</div>
                 </div>
                 <div class="card-actions">
                     ${owned
@@ -1211,12 +1226,25 @@
             searchTimeout = setTimeout(async () => {
                 try {
                     const cards = await paginatedFetch(`/cards/search?q=${encodeURIComponent(q)}&game=pokemon`);
-                    searchResults = cards.map(c => ({
-                        id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
-                        number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
-                        image: c.image_url || '', setId: c.set?.id || '',
-                        setName: c.set?.name || '', prices: c.prices || null
-                    }));
+                    const all = cards.filter(c => hasCardNumber(c.number) && getDexId(c.name))
+                        .map(c => ({
+                            id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
+                            number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
+                            image: c.image_url || '', setId: c.set?.id || '',
+                            setName: c.set?.name || '', prices: c.prices || null,
+                            dexId: getDexId(c.name)
+                        }));
+                    const dedupedMap = {};
+                    for (const c of all) {
+                        const key = c.setName + '-' + c.number;
+                        if (!dedupedMap[key] || c.variant === 'Normal') {
+                            dedupedMap[key] = c;
+                        }
+                    }
+                    searchResults = Object.values(dedupedMap).sort((a, b) => {
+                        if (a.dexId && b.dexId && a.dexId !== b.dexId) return a.dexId - b.dexId;
+                        return parseInt(getCardBaseNumber(a.number) || 0) - parseInt(getCardBaseNumber(b.number) || 0);
+                    });
                     renderSearchResults(searchResults);
                 } catch (e) {
                     document.getElementById('searchContent').innerHTML = `<div class="error-msg">${e.message}</div>`;
