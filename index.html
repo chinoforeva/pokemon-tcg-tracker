@@ -1157,6 +1157,7 @@
                 } else {
                     toggleBtn.style.display = 'none';
                 }
+                const setName = currentSetCards[0]?.setName || setSlug;
                 document.getElementById('setCardsTitle').textContent = setName;
                 populateSetFilters();
                 renderSetCards(currentSetCards);
