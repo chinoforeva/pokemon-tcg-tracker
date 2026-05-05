@@ -466,6 +466,7 @@
         let searchResults = [];
         let collection = JSON.parse(localStorage.getItem('chiniCollection') || '{}');
         let pricingCache = JSON.parse(localStorage.getItem('chiniPricing') || '{}');
+        let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache') || '{}');
         let openPriceDropdown = null;
         let searchTimeout = null;
         let rateLimitRemaining = 200;
@@ -1145,7 +1146,19 @@
             document.getElementById('setCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading cards...</span></div>';
             showView('set-cards');
             try {
-                const cards = await paginatedFetch(`/cards/search?game=pokemon&set=${encodeURIComponent(setSlug)}`);
+                let cards;
+                const cacheKey = setSlug;
+                const cached = setCardsCache[cacheKey];
+                const cacheTime = localStorage.getItem('chiniSetCardsTime_' + cacheKey);
+                const now = Date.now();
+                if (cached && cacheTime && (now - parseInt(cacheTime)) < 86400000) {
+                    cards = cached;
+                } else {
+                    cards = await paginatedFetch(`/cards/search?game=pokemon&set=${encodeURIComponent(setSlug)}`);
+                    setCardsCache[cacheKey] = cards;
+                    localStorage.setItem('chiniSetCardsCache', JSON.stringify(setCardsCache));
+                    localStorage.setItem('chiniSetCardsTime_' + cacheKey, now.toString());
+                }
                     const valid = cards.filter(c => c.name && c.number && c.rarity && c.variant);
                 const excluded = cards.filter(c => !(c.name && c.number && c.rarity && c.variant));
                 const all = valid.map(c => ({
