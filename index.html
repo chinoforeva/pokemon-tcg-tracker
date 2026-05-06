@@ -467,23 +467,26 @@
         </div>
     </div>
     <script>
-        const API_BASE = 'https://api.tcgpricelookup.com/v1';
+        const EN_API = 'https://api.pokemontcg.io/v2';
+        const JP_API = 'https://api.tcgpricelookup.com/v1';
         const API_KEY = 'tcg_98ba4fa4d7647b648406e9b456d896070b74c4c3a7b099d5';
-        const PAGE_SIZE = 100;
+        const cardsPerPage = 100;
 
-        const GAMES = { en: 'pokemon', jp: 'pokemon-jp' };
         let currentLang = localStorage.getItem('chiniLang') || 'en';
 
         let allSets = [];
         let currentSet = null;
         let currentSetCards = [];
+        let setCardsPage = 1;
         let searchResults = [];
         let collection = JSON.parse(localStorage.getItem('chiniCollection_' + currentLang) || '{}');
         let pricingCache = JSON.parse(localStorage.getItem('chiniPricing') || '{}');
         let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache_' + currentLang) || '{}');
         let openPriceDropdown = null;
         let searchTimeout = null;
-        const cardsPerPage = 100;
+
+        function apiBase() { return currentLang === 'jp' ? JP_API : EN_API; }
+        function jpGame() { return 'pokemon-jp'; }
 
         function switchLang(lang) {
             if (lang === currentLang) return;
@@ -505,8 +508,8 @@
             loadSets();
         }
 
-        async function apiFetch(endpoint) {
-            const r = await fetch(`${API_BASE}${endpoint}`, {
+        async function apiFetch(url) {
+            const r = await fetch(url, {
                 headers: { 'X-API-Key': API_KEY }
             });
             if (r.status === 429) throw new Error('Rate limit exceeded. Please try again later.');
@@ -517,18 +520,59 @@
             return r.json();
         }
 
-        async function paginatedFetch(endpoint) {
+        async function paginatedFetchEN(endpoint) {
             let all = [];
-            let offset = 0;
+            let page = 1;
+            const sep = endpoint.includes('?') ? '&' : '?';
             while (true) {
-                const resp = await apiFetch(`${endpoint}&limit=${PAGE_SIZE}&offset=${offset}`);
+                const resp = await apiFetch(`${EN_API}${endpoint}${sep}pageSize=250&page=${page}`);
                 const items = resp.data || [];
                 all = all.concat(items);
-                offset += PAGE_SIZE;
+                page++;
+                if (resp.totalCount != null) {
+                    if (all.length >= resp.totalCount) break;
+                } else {
+                    if (items.length < 250) break;
+                }
+            }
+            return all;
+        }
+
+        async function paginatedFetchJP(endpoint) {
+            let all = [];
+            let offset = 0;
+            const sep = endpoint.includes('?') ? '&' : '?';
+            while (true) {
+                const resp = await apiFetch(`${JP_API}${endpoint}${sep}limit=100&offset=${offset}`);
+                const items = resp.data || [];
+                all = all.concat(items);
+                offset += 100;
                 if (all.length >= (resp.total || 0)) break;
                 if (!items.length) break;
             }
             return all;
+        }
+
+        function normalizeENCard(c) {
+            return {
+                id: c.id, name: c.name || 'Unknown', number: c.number || '',
+                rarity: c.rarity || '', variant: '',
+                image: c.images?.large || c.images?.small || '',
+                setSlug: c.set?.id || '', setName: c.set?.name || '',
+                tcgplayer: c.tcgplayer || null,
+                prices: null
+            };
+        }
+
+        function normalizeJPCard(c) {
+            return {
+                id: c.id, name: c.name, number: c.number || '',
+                rarity: c.rarity || '', variant: c.variant || '',
+                image: c.image_url || '',
+                setSlug: c.set?.slug || '', setName: c.set?.name || '',
+                tcgplayer: null,
+                prices: c.prices || null
+            };
         }
 
         function fmt(n) {
@@ -537,57 +581,91 @@
         }
 
         function getBestPrice(card) {
-            if (!card?.prices?.raw) return null;
-            const raw = card.prices.raw;
-            const conditions = ['near_mint', 'lightly_played', 'moderately_played', 'heavily_played', 'damaged'];
-            for (const cond of conditions) {
-                if (raw[cond]?.tcgplayer?.market) return raw[cond].tcgplayer.market;
+            if (card?.tcgplayer?.prices) {
+                const p = card.tcgplayer.prices;
+                return p.holofoil?.market || p.normal?.market || p.reverseHolofoil?.market || null;
+            }
+            if (card?.prices?.raw) {
+                const raw = card.prices.raw;
+                for (const cond of ['near_mint', 'lightly_played', 'moderately_played', 'heavily_played', 'damaged']) {
+                    if (raw[cond]?.tcgplayer?.market) return raw[cond].tcgplayer.market;
+                }
             }
             return null;
         }
 
         function buildPriceDropdownHTML(card) {
-            if (!card?.prices?.raw) return '<div class="price-row"><span class="price-label">No data</span><span class="price-value no-data">N/A</span></div>';
-            const raw = card.prices.raw;
-            let html = '<div class="price-market">TCGPlayer</div>';
-            let has = false;
-            const condLabels = { near_mint: 'NM', lightly_played: 'LP', moderately_played: 'MP', heavily_played: 'HP', damaged: 'DMG' };
-            for (const [key, label] of Object.entries(condLabels)) {
-                if (raw[key]?.tcgplayer?.market) {
-                    html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${fmt(raw[key].tcgplayer.market)}</span></div>`;
-                    has = true;
-                }
-            }
-            if (!has) html = '<div class="price-row"><span class="price-label">No data</span><span class="price-value no-data">N/A</span></div>';
-            return html;
-        }
-
-        function buildModalPricesHTML(card) {
-            if (!card?.prices?.raw) return '';
-            const raw = card.prices.raw;
-            let html = '<div class="section-label">TCGPlayer</div>';
-            let has = false;
-            const condLabels = { near_mint: 'Near Mint', lightly_played: 'Lightly Played', moderately_played: 'Moderately Played', heavily_played: 'Heavily Played', damaged: 'Damaged' };
-            for (const [key, label] of Object.entries(condLabels)) {
-                if (raw[key]?.tcgplayer) {
-                    const p = raw[key].tcgplayer;
-                    const parts = [];
-                    if (p.market) parts.push('Market: ' + fmt(p.market));
-                    if (p.low && p.low > 0) parts.push('Low: ' + fmt(p.low));
-                    if (p.high && p.high > 0) parts.push('High: ' + fmt(p.high));
-                    if (parts.length) {
-                        html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${parts.join(' / ')}</span></div>`;
+            if (card?.tcgplayer?.prices) {
+                const prices = card.tcgplayer.prices;
+                let html = '<div class="price-market">TCGPlayer</div>';
+                let has = false;
+                for (const [key, label] of [['holofoil', 'Holo'], ['normal', 'Normal'], ['reverseHolofoil', 'Reverse']]) {
+                    if (prices[key]?.market) {
+                        html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${fmt(prices[key].market)}</span></div>`;
                         has = true;
                     }
                 }
+                if (!has) html = '<div class="price-row"><span class="price-label">No data</span><span class="price-value no-data">N/A</span></div>';
+                return html;
             }
-            return has ? `<div class="card-modal-prices">${html}</div>` : '';
+            if (card?.prices?.raw) {
+                const raw = card.prices.raw;
+                let html = '<div class="price-market">TCGPlayer</div>';
+                let has = false;
+                for (const [key, label] of [['near_mint', 'NM'], ['lightly_played', 'LP'], ['moderately_played', 'MP']]) {
+                    if (raw[key]?.tcgplayer?.market) {
+                        html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${fmt(raw[key].tcgplayer.market)}</span></div>`;
+                        has = true;
+                    }
+                }
+                if (!has) html = '<div class="price-row"><span class="price-label">No data</span><span class="price-value no-data">N/A</span></div>';
+                return html;
+            }
+            return '<div class="price-row"><span class="price-label">No data</span><span class="price-value no-data">N/A</span></div>';
+        }
+
+        function buildModalPricesHTML(card) {
+            if (card?.tcgplayer?.prices) {
+                const prices = card.tcgplayer.prices;
+                let html = '<div class="section-label">TCGPlayer</div>';
+                let has = false;
+                for (const [key, label] of [['holofoil', 'Holofoil'], ['normal', 'Normal'], ['reverseHolofoil', 'Reverse Holo']]) {
+                    if (prices[key]) {
+                        const parts = [];
+                        if (prices[key].market) parts.push('Market: ' + fmt(prices[key].market));
+                        if (prices[key].low) parts.push('Low: ' + fmt(prices[key].low));
+                        if (parts.length) {
+                            html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${parts.join(' / ')}</span></div>`;
+                            has = true;
+                        }
+                    }
+                }
+                return has ? `<div class="card-modal-prices">${html}</div>` : '';
+            }
+            if (card?.prices?.raw) {
+                const raw = card.prices.raw;
+                let html = '<div class="section-label">TCGPlayer</div>';
+                let has = false;
+                for (const [key, label] of [['near_mint', 'Near Mint'], ['lightly_played', 'Lightly Played'], ['moderately_played', 'Moderately Played']]) {
+                    if (raw[key]?.tcgplayer) {
+                        const p = raw[key].tcgplayer;
+                        const parts = [];
+                        if (p.market) parts.push('Market: ' + fmt(p.market));
+                        if (p.low && p.low > 0) parts.push('Low: ' + fmt(p.low));
+                        if (parts.length) {
+                            html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${parts.join(' / ')}</span></div>`;
+                            has = true;
+                        }
+                    }
+                }
+                return has ? `<div class="card-modal-prices">${html}</div>` : '';
+            }
+            return '';
         }
 
         function normalizeCardNumber(n) {
             if (!n) return 0;
-            const parts = n.split('/');
-            return parseInt(parts[0]) || 0;
+            return parseInt(n.split('/')[0]) || 0;
         }
 
         async function loadSets() {
@@ -600,11 +678,14 @@
                 if (cached && cachedTime && (now - parseInt(cachedTime)) < 3600000) {
                     allSets = JSON.parse(cached);
                 } else {
-                    const sets = await paginatedFetch(`/sets?game=${GAMES[currentLang]}`);
-                    allSets = sets.map(s => ({
-                        id: s.id, slug: s.slug, name: s.name,
-                        cardCount: s.card_count || 0
-                    }));
+                    if (currentLang === 'jp') {
+                        const sets = await paginatedFetchJP(`/sets?game=${jpGame()}`);
+                        allSets = sets.map(s => ({ id: s.id, slug: s.slug, name: s.name, cardCount: s.card_count || 0 }));
+                    } else {
+                        const sets = await paginatedFetchEN('/sets');
+                        allSets = sets.map(s => ({ id: s.id, slug: s.id, name: s.name, cardCount: s.total, releasedAt: s.releaseDate || '1900-01-01', logo: s.images?.logo || s.images?.symbol || null }));
+                        allSets.sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
+                    }
                     localStorage.setItem('chiniSets_' + currentLang, JSON.stringify(allSets));
                     localStorage.setItem('chiniSetsTime_' + currentLang, now.toString());
                 }
@@ -625,8 +706,11 @@
             if (!sets.length) { el.innerHTML = '<div class="empty-state"><h3>No sets found</h3></div>'; return; }
             el.innerHTML = `<div class="expansions-grid">${sets.map(s => {
                 const owned = Object.values(collection).filter(c => c.setSlug === s.slug).length;
+                const logoHTML = (!currentLang || currentLang === 'en') && s.logo
+                    ? `<img src="${s.logo}" alt="${s.name}" onerror="this.style.display='none'" style="max-height:70px;max-width:85%;object-fit:contain;">`
+                    : `<span class="set-label">${s.name}</span>`;
                 return `<div class="expansion-card" onclick="openSet('${s.slug}')">
-                    <div class="expansion-logo-wrap"><span class="set-label">${s.name}</span></div>
+                    <div class="expansion-logo-wrap">${logoHTML}</div>
                     <div class="expansion-info">
                         <div class="expansion-meta">
                             <span>${s.cardCount} cards</span>
@@ -651,26 +735,23 @@
                 if (cached && cacheTime && (now - parseInt(cacheTime)) < 86400000) {
                     cards = cached;
                 } else {
-                    cards = await paginatedFetch(`/cards/search?set=${encodeURIComponent(setSlug)}&game=${GAMES[currentLang]}`);
+                    if (currentLang === 'jp') {
+                        const raw = await paginatedFetchJP(`/cards/search?set=${encodeURIComponent(setSlug)}&game=${jpGame()}`);
+                        cards = raw.map(normalizeJPCard);
+                    } else {
+                        const raw = await paginatedFetchEN(`/cards?q=set.id:${encodeURIComponent(setSlug)}`);
+                        cards = raw.filter(c => c.number && c.rarity).map(normalizeENCard);
+                    }
                     setCardsCache[setSlug] = cards;
                     localStorage.setItem('chiniSetCardsCache_' + currentLang, JSON.stringify(setCardsCache));
                     localStorage.setItem('chiniSetCardsTime_' + setSlug, now.toString());
                 }
-                const all = cards.map(c => ({
-                    id: c.id, name: c.name, number: c.number || '',
-                    rarity: c.rarity || '', variant: c.variant || '',
-                    image: c.image_url || '',
-                    setSlug: c.set?.slug || '', setName: c.set?.name || '',
-                    prices: c.prices || null
-                }));
                 const dedupedMap = {};
-                for (const c of all) {
+                for (const c of cards) {
                     const key = c.image + '|' + c.rarity + '|' + (c.variant || '');
                     if (!dedupedMap[key]) dedupedMap[key] = c;
                 }
-                currentSetCards = Object.values(dedupedMap).sort((a, b) => {
-                    return normalizeCardNumber(a.number) - normalizeCardNumber(b.number);
-                });
+                currentSetCards = Object.values(dedupedMap).sort((a, b) => normalizeCardNumber(a.number) - normalizeCardNumber(b.number));
                 document.getElementById('setCardsTitle').textContent = currentSetCards[0]?.setName || setSlug;
                 populateSetFilters();
                 renderSetPage(1);
@@ -678,8 +759,6 @@
                 document.getElementById('setCardsContent').innerHTML = `<div class="error-msg">${e.message}</div>`;
             }
         }
-
-        let setCardsPage = 1;
 
         function renderSetPage(page) {
             setCardsPage = page || 1;
@@ -764,6 +843,7 @@
         function cardHTML(c, showActions = true) {
             const owned = !!collection[c.id];
             const img = c.image;
+            const meta = `${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}${c.variant ? ' · ' + c.variant : ''}`;
             return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${c.id}">
                 <button class="price-btn" onclick="togglePrice('${c.id}', event)">$</button>
                 <div class="price-dropdown" data-card-id="${c.id}"><div class="price-row"><span class="price-label">Loading...</span></div></div>
@@ -773,7 +853,7 @@
                 </div>
                 <div class="card-details">
                     <div class="card-name">${c.name}</div>
-                    <div class="card-meta">${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}${c.variant ? ' · ' + c.variant : ''}</div>
+                    <div class="card-meta">${meta}</div>
                 </div>
                 ${showActions ? `<div class="card-actions">${owned
                     ? `<button class="remove-btn" onclick="toggleCard('${c.id}')">Remove</button>`
@@ -785,6 +865,7 @@
         function searchHTML(c) {
             const owned = !!collection[c.id];
             const img = c.image;
+            const meta = `${c.setName || ''} ${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}${c.variant ? ' · ' + c.variant : ''}`;
             return `<div class="card-tcg ${owned ? 'owned' : ''}">
                 <button class="price-btn" onclick="togglePrice('${c.id}', event)">$</button>
                 <div class="price-dropdown" data-card-id="${c.id}"><div class="price-row"><span class="price-label">Loading...</span></div></div>
@@ -794,7 +875,7 @@
                 </div>
                 <div class="card-details">
                     <div class="card-name">${c.name}</div>
-                    <div class="card-meta">${c.setName || ''} ${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}${c.variant ? ' · ' + c.variant : ''}</div>
+                    <div class="card-meta">${meta}</div>
                 </div>
                 <div class="card-actions">
                     ${owned
@@ -816,16 +897,16 @@
             document.getElementById('searchContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
             searchTimeout = setTimeout(async () => {
                 try {
-                    const cards = await paginatedFetch(`/cards/search?q=${encodeURIComponent(q)}&game=${GAMES[currentLang]}`);
-                    const all = cards.filter(c => c.number && c.rarity).map(c => ({
-                        id: c.id, name: c.name, number: c.number || '',
-                        rarity: c.rarity || '', variant: c.variant || '',
-                        image: c.image_url || '',
-                        setSlug: c.set?.slug || '', setName: c.set?.name || '',
-                        prices: c.prices || null
-                    }));
+                    let cards;
+                    if (currentLang === 'jp') {
+                        const raw = await paginatedFetchJP(`/cards/search?q=${encodeURIComponent(q)}&game=${jpGame()}`);
+                        cards = raw.filter(c => c.number && c.rarity).map(normalizeJPCard);
+                    } else {
+                        const raw = await paginatedFetchEN(`/cards?q=name:*${encodeURIComponent(q)}*`);
+                        cards = raw.filter(c => c.number && c.rarity).map(normalizeENCard);
+                    }
                     const dedupedMap = {};
-                    for (const c of all) {
+                    for (const c of cards) {
                         const key = c.image + '|' + c.rarity + '|' + (c.variant || '');
                         if (!dedupedMap[key]) dedupedMap[key] = c;
                     }
@@ -863,26 +944,28 @@
         function refreshCurrentView() {
             const activeView = document.querySelector('.view.active');
             if (!activeView) return;
-            if (activeView.id === 'view-set-cards') {
-                filterSetCards();
-            } else if (activeView.id === 'view-search') {
-                renderSearchResults(searchResults);
-            } else if (activeView.id === 'view-collection') {
-                renderCollection();
-            } else if (activeView.id === 'view-sets') {
-                renderSets(allSets);
-            }
+            if (activeView.id === 'view-set-cards') { filterSetCards(); }
+            else if (activeView.id === 'view-search') { renderSearchResults(searchResults); }
+            else if (activeView.id === 'view-collection') { renderCollection(); }
+            else if (activeView.id === 'view-sets') { renderSets(allSets); }
         }
 
         async function refreshCollectionPrices() {
             const ids = Object.keys(collection);
             if (!ids.length) return;
-            for (let i = 0; i < ids.length; i += 20) {
-                const batch = ids.slice(i, i + 20);
+            for (let i = 0; i < ids.length; i += 10) {
+                const batch = ids.slice(i, i + 10);
                 try {
-                    for (const id of batch) {
-                        const resp = await apiFetch(`/cards/${encodeURIComponent(id)}`);
-                        if (resp.data) pricingCache[id] = resp.data.prices || null;
+                    if (currentLang === 'en') {
+                        const resp = await apiFetch(`${EN_API}/cards?ids=${batch.join(',')}`);
+                        for (const c of resp.data || []) {
+                            pricingCache[c.id] = c.tcgplayer || null;
+                        }
+                    } else {
+                        for (const id of batch) {
+                            const resp = await apiFetch(`${JP_API}/cards/${encodeURIComponent(id)}`);
+                            if (resp.data) pricingCache[id] = resp.data.prices || null;
+                        }
                     }
                 } catch (e) { console.warn('Price fetch failed:', e); }
             }
@@ -927,7 +1010,7 @@
 
         function getPriceFromCache(id) {
             if (pricingCache[id]) {
-                return getBestPrice({ prices: pricingCache[id] });
+                return getBestPrice({ tcgplayer: pricingCache[id], prices: currentLang === 'jp' ? pricingCache[id] : null });
             }
             return null;
         }
@@ -944,8 +1027,7 @@
         function updateColStats(cards) {
             document.getElementById('colUnique').textContent = cards.length;
             document.getElementById('colTotal').textContent = cards.reduce((s, c) => s + (c.quantity || 1), 0);
-            const species = new Set(cards.map(c => c.name));
-            document.getElementById('colSets').textContent = species.size;
+            document.getElementById('colSets').textContent = new Set(cards.map(c => c.name)).size;
             const val = cards.reduce((s, c) => s + (getPriceFromCache(c.id) || 0) * (c.quantity || 1), 0);
             document.getElementById('colValue').textContent = fmt(val) || '$0.00';
         }
@@ -966,17 +1048,14 @@
             document.getElementById(viewMap[view]).classList.add('active');
             const btnMap = { 'sets': 'btn-sets', 'set-cards': 'btn-sets', 'search': 'btn-search', 'collection': 'btn-collection' };
             document.getElementById(btnMap[view]).classList.add('active');
-            if (view === 'collection') {
-                renderCollection();
-                refreshCollectionPrices();
-            }
+            if (view === 'collection') { renderCollection(); refreshCollectionPrices(); }
         }
 
         function openModal(cardId) {
             let c = currentSetCards.find(x => x.id === cardId) || searchResults.find(x => x.id === cardId);
             const colCard = collection[cardId];
             if (!c && colCard) {
-                c = { id: colCard.id, name: colCard.name, image: colCard.image, setSlug: colCard.setSlug, setName: '', number: '', rarity: '', variant: '', prices: pricingCache[cardId] || null };
+                c = { id: colCard.id, name: colCard.name, image: colCard.image, setSlug: colCard.setSlug, setName: '', number: '', rarity: '', variant: '', tcgplayer: currentLang === 'en' ? pricingCache[cardId] || null : null, prices: currentLang === 'jp' ? pricingCache[cardId] || null : null };
             }
             if (!c) return;
             document.getElementById('modalImg').src = c.image || '';
@@ -1008,9 +1087,7 @@
             const idx = currentSetCards.findIndex(c => c.id === cardId);
             if (idx === -1) return;
             const targetPage = Math.floor(idx / cardsPerPage) + 1;
-            if (targetPage !== setCardsPage) {
-                renderSetPage(targetPage);
-            }
+            if (targetPage !== setCardsPage) renderSetPage(targetPage);
             setTimeout(() => {
                 const el = document.querySelector(`.card-tcg[data-card-id="${CSS.escape(cardId)}"]`);
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1025,10 +1102,7 @@
             }
             const dd = document.querySelector(`.price-dropdown[data-card-id="${cardId}"]`);
             if (!dd) return;
-            if (dd.classList.contains('show')) {
-                dd.classList.remove('show'); dd.style.transform = 'none';
-                openPriceDropdown = null; return;
-            }
+            if (dd.classList.contains('show')) { dd.classList.remove('show'); dd.style.transform = 'none'; openPriceDropdown = null; return; }
             const btn = dd.parentElement.querySelector('.price-btn');
             const rect = btn.getBoundingClientRect();
             const spaceBelow = window.innerHeight - rect.bottom;
@@ -1038,15 +1112,21 @@
             dd.classList.add('show');
             openPriceDropdown = { id: cardId };
             const c = currentSetCards.find(x => x.id === cardId) || searchResults.find(x => x.id === cardId);
-            if (c?.prices) { dd.innerHTML = buildPriceDropdownHTML(c); return; }
-            if (pricingCache[cardId]) { dd.innerHTML = buildPriceDropdownHTML({ prices: pricingCache[cardId] }); return; }
+            if (c?.tcgplayer || c?.prices) { dd.innerHTML = buildPriceDropdownHTML(c); return; }
+            if (pricingCache[cardId]) { dd.innerHTML = buildPriceDropdownHTML(currentLang === 'en' ? { tcgplayer: pricingCache[cardId] } : { prices: pricingCache[cardId] }); return; }
             btn.classList.add('loading'); btn.textContent = '...';
             try {
-                const resp = await apiFetch(`/cards/${encodeURIComponent(cardId)}`);
-                const card = resp.data;
-                pricingCache[cardId] = card.prices || null;
+                if (currentLang === 'en') {
+                    const resp = await apiFetch(`${EN_API}/cards/${encodeURIComponent(cardId)}`);
+                    const card = resp.data;
+                    pricingCache[cardId] = card.tcgplayer || null;
+                } else {
+                    const resp = await apiFetch(`${JP_API}/cards/${encodeURIComponent(cardId)}`);
+                    const card = resp.data;
+                    pricingCache[cardId] = card.prices || null;
+                }
                 saveCollection();
-                dd.innerHTML = buildPriceDropdownHTML({ prices: pricingCache[cardId] });
+                dd.innerHTML = buildPriceDropdownHTML(currentLang === 'en' ? { tcgplayer: pricingCache[cardId] } : { prices: pricingCache[cardId] });
             } catch (e) {
                 dd.innerHTML = '<div class="price-row"><span class="price-label">Error</span><span class="price-value no-data">!</span></div>';
             }
