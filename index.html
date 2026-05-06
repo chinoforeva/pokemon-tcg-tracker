@@ -1011,7 +1011,7 @@
 
         async function navigateToCardInSet(setId, cardId) {
             closeCardModal();
-            switchView('sets');
+            showView('sets');
             await openSet(setId);
             document.getElementById('setCardSearch').value = '';
             document.getElementById('rarityFilter').value = '';
