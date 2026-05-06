@@ -484,6 +484,12 @@
         })();
 
         const CACHE_V = 'v5';
+        const JP_SETS_WITH_IMAGES = new Set([
+            'S12a','S9a','S9','S12',
+            'SV4a','SV7a','SV2P','SV8a','SV6','SVLS','SVK','SV5a',
+            'SV4K','SV8','SV9a','SV4M','SV3','SV2a','SV7','SVLN',
+            'SV5K','SV3a','SV1V','SV2D','SV1S','SV10','SV9'
+        ]);
         let currentLang = localStorage.getItem('chiniLang') || 'en';
 
         let allSets = [];
@@ -718,13 +724,6 @@
                     allSets = JSON.parse(cached);
                 } else {
                     if (currentLang === 'jp') {
-                        // Only these JP sets have card images in TCGdex
-                        const JP_SETS_WITH_IMAGES = new Set([
-                            'S12a','S9a','S9','S12',
-                            'SV4a','SV7a','SV2P','SV8a','SV6','SVLS','SVK','SV5a',
-                            'SV4K','SV8','SV9a','SV4M','SV3','SV2a','SV7','SVLN',
-                            'SV5K','SV3a','SV1V','SV2D','SV1S','SV10','SV9'
-                        ]);
                         const sets = await apiFetchJP('/ja/sets');
                         const briefSets = sets
                             .filter(s => JP_SETS_WITH_IMAGES.has(s.id))
@@ -975,7 +974,11 @@
                     if (currentLang === 'jp') {
                         const allBrief = await apiFetchJP('/ja/cards');
                         const lowerQ = q.toLowerCase();
-                        const filtered = allBrief.filter(c => c.name.toLowerCase().includes(lowerQ) || (c.localId && c.localId.includes(q)));
+                        const filtered = allBrief.filter(c => {
+                            const setId = c.id.split('-').slice(0, -1).join('-');
+                            return JP_SETS_WITH_IMAGES.has(setId)
+                                && (c.name.toLowerCase().includes(lowerQ) || (c.localId && c.localId.includes(q)));
+                        });
                         cards = filtered.map(c => {
                             const setId = c.id.split('-').slice(0, -1).join('-');
                             const serie = setToSerie[setId] || extractSeriePrefix(setId);
@@ -986,7 +989,7 @@
                                 setSlug: setId, setName: '',
                                 tcgplayer: null, pricing: null, variants: null
                             };
-                        }).filter(c => c.image);
+                        });
                     } else {
                         const raw = await paginatedFetchEN(`/cards?q=name:*${encodeURIComponent(q)}*`);
                         cards = raw.filter(c => c.number && c.rarity).map(normalizeENCard);
