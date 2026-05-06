@@ -718,14 +718,23 @@
                     allSets = JSON.parse(cached);
                 } else {
                     if (currentLang === 'jp') {
+                        // Only these JP sets have card images in TCGdex
+                        const JP_SETS_WITH_IMAGES = new Set([
+                            'S12a','S9a','S9','S12',
+                            'SV4a','SV7a','SV2P','SV8a','SV6','SVLS','SVK','SV5a',
+                            'SV4K','SV8','SV9a','SV4M','SV3','SV2a','SV7','SVLN',
+                            'SV5K','SV3a','SV1V','SV2D','SV1S','SV10','SV9'
+                        ]);
                         const sets = await apiFetchJP('/ja/sets');
-                        const briefSets = sets.map(s => ({
-                            id: s.id, slug: s.id, name: s.name,
-                            cardCount: s.cardCount?.total || 0,
-                            releasedAt: s.releaseDate || '1900-01-01',
-                            logo: s.logo || null,
-                            symbol: s.symbol || null
-                        }));
+                        const briefSets = sets
+                            .filter(s => JP_SETS_WITH_IMAGES.has(s.id))
+                            .map(s => ({
+                                id: s.id, slug: s.id, name: s.name,
+                                cardCount: s.cardCount?.total || 0,
+                                releasedAt: s.releaseDate || '1900-01-01',
+                                logo: s.logo || null,
+                                symbol: s.symbol || null
+                            }));
                         el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Fetching card details...</span></div>';
                         const CHUNK = 10;
                         for (let i = 0; i < briefSets.length; i += CHUNK) {
@@ -733,8 +742,8 @@
                             const results = await Promise.all(chunk.map(async (s) => {
                                 try {
                                     const fullSet = await apiFetchJP(`/ja/sets/${s.id}`);
-                                    const withImage = fullSet.cards?.filter(c => c.image)?.length || 0;
                                     if (fullSet.serie?.id) setToSerie[s.slug] = fullSet.serie.id;
+                                    const withImage = fullSet.cards?.filter(c => c.image)?.length || 0;
                                     return { ...s, cardCount: withImage };
                                 } catch {
                                     return { ...s, cardCount: 0 };
