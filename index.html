@@ -472,6 +472,7 @@
         const API_KEY = 'tcg_98ba4fa4d7647b648406e9b456d896070b74c4c3a7b099d5';
         const cardsPerPage = 100;
 
+        const CACHE_V = 'v3';
         let currentLang = localStorage.getItem('chiniLang') || 'en';
 
         let allSets = [];
@@ -479,9 +480,9 @@
         let currentSetCards = [];
         let setCardsPage = 1;
         let searchResults = [];
-        let collection = JSON.parse(localStorage.getItem('chiniCollection_' + currentLang) || '{}');
+        let collection = JSON.parse(localStorage.getItem('chiniCollection_' + CACHE_V + '_' + currentLang) || '{}');
         let pricingCache = JSON.parse(localStorage.getItem('chiniPricing') || '{}');
-        let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache_' + currentLang) || '{}');
+        let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache_' + CACHE_V + '_' + currentLang) || '{}');
         let openPriceDropdown = null;
         let searchTimeout = null;
 
@@ -494,8 +495,8 @@
             localStorage.setItem('chiniLang', lang);
             document.getElementById('langEN').classList.toggle('active', lang === 'en');
             document.getElementById('langJP').classList.toggle('active', lang === 'jp');
-            collection = JSON.parse(localStorage.getItem('chiniCollection_' + lang) || '{}');
-            setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache_' + lang) || '{}');
+            collection = JSON.parse(localStorage.getItem('chiniCollection_' + CACHE_V + '_' + lang) || '{}');
+            setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache_' + CACHE_V + '_' + lang) || '{}');
             allSets = [];
             currentSetCards = [];
             searchResults = [];
@@ -672,8 +673,8 @@
             const el = document.getElementById('setsContent');
             el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading sets...</span></div>';
             try {
-                const cached = localStorage.getItem('chiniSets_' + currentLang);
-                const cachedTime = localStorage.getItem('chiniSetsTime_' + currentLang);
+                const cached = localStorage.getItem('chiniSets_' + CACHE_V + '_' + currentLang);
+                const cachedTime = localStorage.getItem('chiniSetsTime_' + CACHE_V + '_' + currentLang);
                 const now = Date.now();
                 if (cached && cachedTime && (now - parseInt(cachedTime)) < 3600000) {
                     allSets = JSON.parse(cached);
@@ -686,8 +687,8 @@
                         allSets = sets.map(s => ({ id: s.id, slug: s.id, name: s.name, cardCount: s.total, releasedAt: s.releaseDate || '1900-01-01', logo: s.images?.logo || s.images?.symbol || null }));
                         allSets.sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
                     }
-                    localStorage.setItem('chiniSets_' + currentLang, JSON.stringify(allSets));
-                    localStorage.setItem('chiniSetsTime_' + currentLang, now.toString());
+                    localStorage.setItem('chiniSets_' + CACHE_V + '_' + currentLang, JSON.stringify(allSets));
+                    localStorage.setItem('chiniSetsTime_' + CACHE_V + '_' + currentLang, now.toString());
                 }
                 renderSets(allSets);
             } catch (e) {
@@ -743,7 +744,7 @@
                         cards = raw.filter(c => c.number && c.rarity).map(normalizeENCard);
                     }
                     setCardsCache[setSlug] = cards;
-                    localStorage.setItem('chiniSetCardsCache_' + currentLang, JSON.stringify(setCardsCache));
+                    localStorage.setItem('chiniSetCardsCache_' + CACHE_V + '_' + currentLang, JSON.stringify(setCardsCache));
                     localStorage.setItem('chiniSetCardsTime_' + setSlug, now.toString());
                 }
                 const dedupedMap = {};
@@ -973,7 +974,7 @@
         }
 
         function saveCollection() {
-            localStorage.setItem('chiniCollection_' + currentLang, JSON.stringify(collection));
+            localStorage.setItem('chiniCollection_' + CACHE_V + '_' + currentLang, JSON.stringify(collection));
             localStorage.setItem('chiniPricing', JSON.stringify(pricingCache));
         }
 
