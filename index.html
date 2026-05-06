@@ -473,13 +473,14 @@
 
         // Clean up old cache versions
         (function cleanOldCache() {
+            const keys = [];
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
                 if (k && k.startsWith('chini') && !k.includes('v5')) {
-                    localStorage.removeItem(k);
-                    i--;
+                    keys.push(k);
                 }
             }
+            keys.forEach(k => localStorage.removeItem(k));
         })();
 
         const CACHE_V = 'v5';
