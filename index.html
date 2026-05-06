@@ -488,7 +488,8 @@
         let openPriceDropdown = null;
         let searchTimeout = null;
 
-        function langQuery() { return `q=set.language:${LANG_API[currentLang]}`; }
+        function langQuery() { return `set.language:${LANG_API[currentLang]}`; }
+        function combinedQuery(...parts) { return parts.filter(Boolean).join(' '); }
 
         function switchLang(lang) {
             if (lang === currentLang) return;
@@ -623,7 +624,7 @@
                 if (cached && cachedTime && (now - parseInt(cachedTime)) < 3600000) {
                     allSets = JSON.parse(cached);
                 } else {
-                    const sets = await paginatedFetch(`/sets?${langQuery()}`);
+                    const sets = await paginatedFetch(`/sets?q=${langQuery()}`);
                     allSets = sets.map(s => ({
                         id: s.id, name: s.name, total: s.total,
                         releasedAt: s.releaseDate || '1900-01-01',
@@ -688,7 +689,7 @@
                 if (cached && cacheTime && (now - parseInt(cacheTime)) < 86400000) {
                     cards = cached;
                 } else {
-                    cards = await paginatedFetch(`/cards?${langQuery()}&q=set.id:${setId}`);
+                    cards = await paginatedFetch(`/cards?q=${combinedQuery('set.id:' + setId, langQuery()).replace(/ /g, '%20')}`);
                     setCardsCache[cacheKey] = cards;
                     localStorage.setItem('chiniSetCardsCache_' + currentLang, JSON.stringify(setCardsCache));
                     localStorage.setItem('chiniSetCardsTime_' + cacheKey, now.toString());
@@ -863,7 +864,8 @@
             document.getElementById('searchContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
             searchTimeout = setTimeout(async () => {
                 try {
-                    const cards = await paginatedFetch(`/cards?${langQuery()}&q=name:*${encodeURIComponent(q)}*`, 2);
+                    const queryStr = combinedQuery(`name:*${encodeURIComponent(q)}*`, langQuery()).replace(/ /g, '%20');
+                    const cards = await paginatedFetch(`/cards?q=${queryStr}`, 2);
                     const all = cards.filter(c => c.number && c.rarity)
                         .map(c => ({
                             id: c.id, name: c.name, number: c.number || '',
