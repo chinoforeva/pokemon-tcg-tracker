@@ -516,7 +516,8 @@
             if (r.status === 429) throw new Error('Rate limit exceeded. Please try again later.');
             if (!r.ok) {
                 const err = await r.json().catch(() => ({}));
-                throw new Error(err.message || `HTTP ${r.status}`);
+                const msg = err.error || err.message || `HTTP ${r.status}`;
+                throw new Error(`${msg} (${url})`);
             }
             return r.json();
         }
