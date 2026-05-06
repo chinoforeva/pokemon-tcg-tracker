@@ -375,9 +375,6 @@
             </button>
             <div class="section-header">
                 <h2 class="section-title" id="setCardsTitle"></h2>
-                <button class="toggle-excluded-btn" id="toggleExcludedBtn" onclick="toggleExcludedCards()" style="display:none;">
-                    <span id="toggleExcludedText">Show excluded</span>
-                </button>
             </div>
             <div class="stats-row">
                 <div class="stat-card"><div class="stat-value" id="setTotalCards">0</div><div class="stat-label">Total Cards</div></div>
@@ -455,9 +452,6 @@
         let allSets = [];
         let currentSet = null;
         let currentSetCards = [];
-        let allCardsForSet = [];
-        let excludedCards = [];
-        let showExcluded = false;
         let currentPage = 1;
         let cardsPerPage = 100;
         let searchResults = [];
@@ -650,10 +644,8 @@
                     localStorage.setItem('chiniSetCardsCache', JSON.stringify(setCardsCache));
                     localStorage.setItem('chiniSetCardsTime_' + cacheKey, now.toString());
                 }
-                const valid = cards.filter(c => c.supertypes?.includes('Pokémon') && c.number && c.rarity);
-                const excluded = cards.filter(c => !(c.supertypes?.includes('Pokémon') && c.number && c.rarity));
-                const all = valid.map(c => ({
-                    id: c.id, name: c.name, number: c.number || '',
+                const all = cards.map(c => ({
+                    id: c.id, name: c.name || 'Unknown', number: c.number || '',
                     rarity: c.rarity || '', supertypes: c.supertypes || [],
                     subtypes: c.subtypes || [],
                     image: c.images?.large || c.images?.small || '',
@@ -671,25 +663,7 @@
                     if (a.dexId && b.dexId && a.dexId !== b.dexId) return a.dexId - b.dexId;
                     return parseInt(getCardBaseNumber(a.number) || 0) - parseInt(getCardBaseNumber(b.number) || 0);
                 });
-                excludedCards = excluded.map(c => ({
-                    id: c.id, name: c.name || 'Unknown', number: c.number || '',
-                    rarity: c.rarity || '', supertypes: c.supertypes || [],
-                    subtypes: c.subtypes || [],
-                    image: c.images?.large || c.images?.small || '',
-                    imageSmall: c.images?.small || '',
-                    setId: c.set?.id || '', setName: c.set?.name || '',
-                    tcgplayer: c.tcgplayer || null, dexId: getDexId(c.name)
-                })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                allCardsForSet = currentSetCards.concat(excludedCards);
                 currentPage = 1;
-                showExcluded = false;
-                const toggleBtn = document.getElementById('toggleExcludedBtn');
-                if (excludedCards.length > 0) {
-                    toggleBtn.style.display = 'inline-flex';
-                    document.getElementById('toggleExcludedText').textContent = `Show excluded (${excludedCards.length})`;
-                } else {
-                    toggleBtn.style.display = 'none';
-                }
                 const setName = currentSetCards[0]?.setName || setId;
                 document.getElementById('setCardsTitle').textContent = setName;
                 populateSetFilters();
@@ -700,14 +674,13 @@
         }
 
         function renderSetPage() {
-            const cards = showExcluded ? allCardsForSet : currentSetCards;
-            const totalPages = Math.ceil(cards.length / cardsPerPage) || 1;
+            const totalPages = Math.ceil(currentSetCards.length / cardsPerPage) || 1;
             if (currentPage > totalPages) currentPage = totalPages;
             const start = (currentPage - 1) * cardsPerPage;
             const end = start + cardsPerPage;
-            const pageCards = cards.slice(start, end);
+            const pageCards = currentSetCards.slice(start, end);
             renderSetCards(pageCards);
-            updateSetStats(showExcluded ? cards : currentSetCards);
+            updateSetStats(currentSetCards);
             renderPagination(totalPages);
         }
 
@@ -732,31 +705,16 @@
                 }
             }
             html += `<button class="pagination-btn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>›</button>`;
-            html += `<span class="pagination-info">${currentSetCards.length + excludedCards.length} cards · ${totalPages} pages</span>`;
+            html += `<span class="pagination-info">${currentSetCards.length} cards · ${totalPages} pages</span>`;
             el.innerHTML = html;
         }
 
         function goToPage(p) {
-            const cards = showExcluded ? allCardsForSet : currentSetCards;
-            const totalPages = Math.ceil(cards.length / cardsPerPage) || 1;
+            const totalPages = Math.ceil(currentSetCards.length / cardsPerPage) || 1;
             if (p < 1 || p > totalPages) return;
             currentPage = p;
             renderSetPage();
             document.getElementById('setCardsContent').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-
-        function toggleExcludedCards() {
-            showExcluded = !showExcluded;
-            const btn = document.getElementById('toggleExcludedBtn');
-            btn.classList.toggle('active', showExcluded);
-            if (showExcluded) {
-                document.getElementById('toggleExcludedText').textContent = 'Hide excluded';
-            } else {
-                const text = excludedCards.length > 0 ? `Show excluded (${excludedCards.length})` : 'Show excluded';
-                document.getElementById('toggleExcludedText').textContent = text;
-            }
-            currentPage = 1;
-            renderSetPage();
         }
 
         function populateSetFilters() {
@@ -767,8 +725,7 @@
         function filterSetCards() {
             const q = document.getElementById('setCardSearch').value.toLowerCase();
             const rarity = document.getElementById('rarityFilter').value;
-            const baseCards = showExcluded ? allCardsForSet : currentSetCards;
-            const filtered = baseCards.filter(c => {
+            const filtered = currentSetCards.filter(c => {
                 return (!q || c.name.toLowerCase().includes(q) || c.number.toLowerCase().includes(q))
                     && (!rarity || c.rarity === rarity);
             });
@@ -784,11 +741,7 @@
         function renderSetCards(cards) {
             const el = document.getElementById('setCardsContent');
             if (!cards.length) { el.innerHTML = '<div class="empty-state"><h3>No cards found</h3></div>'; return; }
-            const excludedIds = new Set(excludedCards.map(c => c.id));
-            el.innerHTML = `<div class="cards-grid">${cards.map(c => {
-                const isExcluded = excludedIds.has(c.id);
-                return cardHTML(c, true, isExcluded);
-            }).join('')}</div>`;
+            el.innerHTML = `<div class="cards-grid">${cards.map(c => cardHTML(c, true)).join('')}</div>`;
         }
 
         function updateSetStats(cards) {
@@ -800,11 +753,11 @@
             document.getElementById('setProgress').textContent = total ? Math.round(owned / total * 100) + '%' : '0%';
         }
 
-        function cardHTML(c, showActions = true, isExcluded = false) {
+        function cardHTML(c, showActions = true) {
             const owned = !!collection[c.id];
             const img = c.image;
             const dexStr = c.dexId ? '#' + String(c.dexId).padStart(3, '0') : '';
-            return `<div class="card-tcg ${owned ? 'owned' : ''} ${isExcluded ? 'excluded' : ''}" data-card-id="${c.id}">
+            return `<div class="card-tcg ${owned ? 'owned' : ''}" data-card-id="${c.id}">
                 <button class="price-btn" onclick="togglePrice('${c.id}', event)">$</button>
                 <div class="price-dropdown" data-card-id="${c.id}"><div class="price-row"><span class="price-label">Loading...</span></div></div>
                 <div class="owned-badge"></div>
