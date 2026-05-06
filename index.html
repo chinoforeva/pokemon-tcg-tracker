@@ -780,7 +780,7 @@
                         const fullSet = await apiFetchJP(`/ja/sets/${encodeURIComponent(setSlug)}`);
                         currentSet.name = fullSet.name || setObj?.name;
                         if (fullSet.serie?.id) setToSerie[setSlug] = fullSet.serie.id;
-                        cards = fullSet.cards.map(normalizeJPCard);
+                        cards = fullSet.cards.map(normalizeJPCard).filter(c => c.image);
                     } else {
                         const raw = await paginatedFetchEN(`/cards?q=set.id:${encodeURIComponent(setSlug)}`);
                         cards = raw.filter(c => c.number && c.rarity).map(normalizeENCard);
@@ -950,7 +950,7 @@
                                 setSlug: setId, setName: '',
                                 tcgplayer: null, pricing: null, variants: null
                             };
-                        });
+                        }).filter(c => c.image);
                     } else {
                         const raw = await paginatedFetchEN(`/cards?q=name:*${encodeURIComponent(q)}*`);
                         cards = raw.filter(c => c.number && c.rarity).map(normalizeENCard);
