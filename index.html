@@ -260,6 +260,7 @@
         }
         .collection-item:hover { border-color: var(--border-hover); background: var(--bg-hover); transform: translateX(4px); }
         .collection-thumb { width: 55px; height: 77px; border-radius: 10px; object-fit: cover; background: var(--bg-secondary); flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .collection-num { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; font-family: monospace; min-width: 42px; text-align: right; flex-shrink: 0; }
         .collection-info { flex: 1; min-width: 0; }
         .collection-info h4 { font-size: 0.92rem; font-weight: 600; margin-bottom: 0.25rem; }
         .collection-info p { font-size: 0.72rem; color: var(--text-muted); }
@@ -1023,7 +1024,7 @@
                 if (src) {
                     collection[cardId] = {
                         id: src.id, name: src.name, setSlug: src.setSlug,
-                        image: src.image, quantity: 1,
+                        image: src.image, number: src.number || '', quantity: 1,
                         dateAdded: new Date().toISOString()
                     };
                 }
@@ -1145,6 +1146,7 @@
             el.innerHTML = `<div class="collection-list">${cards.map(c => {
                 const price = fmt(getPriceFromCache(c.id));
                 return `<div class="collection-item">
+                    <span class="collection-num">#${c.number || ''}</span>
                     <img class="collection-thumb" src="${c.image || ''}" alt="${c.name}" onerror="this.style.display='none'">
                     <div class="collection-info">
                         <h4>${c.name}</h4>
