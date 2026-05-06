@@ -660,7 +660,11 @@
                     if (!dedupedMap[key]) dedupedMap[key] = c;
                 }
                 currentSetCards = Object.values(dedupedMap).sort((a, b) => {
-                    if (a.dexId && b.dexId && a.dexId !== b.dexId) return a.dexId - b.dexId;
+                    const aHasDex = a.dexId != null;
+                    const bHasDex = b.dexId != null;
+                    if (aHasDex && !bHasDex) return -1;
+                    if (!aHasDex && bHasDex) return 1;
+                    if (aHasDex && bHasDex) return a.dexId - b.dexId;
                     return parseInt(getCardBaseNumber(a.number) || 0) - parseInt(getCardBaseNumber(b.number) || 0);
                 });
                 currentPage = 1;
