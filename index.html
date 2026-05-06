@@ -546,10 +546,13 @@
             const limit = 100;
             const sep = endpoint.includes('?') ? '&' : '?';
             while (true) {
-                const resp = await apiFetch(`${JP_API}${endpoint}${sep}limit=${limit}&offset=${offset}`);
+                const fullUrl = `${JP_API}${endpoint}${sep}limit=${limit}&offset=${offset}`;
+                console.log('[JP fetch]', fullUrl);
+                const resp = await apiFetch(fullUrl);
                 const items = resp.data || [];
                 all = all.concat(items);
                 const meta = resp.meta || {};
+                console.log('[JP fetch] Got', items.length, 'items, total so far:', all.length, 'hasMore:', meta.hasMore);
                 if (meta.hasMore === false) break;
                 if (meta.total != null && all.length >= meta.total) break;
                 if (!items.length) break;
@@ -786,7 +789,10 @@
                     cards = cached;
                 } else {
                     if (currentLang === 'jp') {
-                        const raw = await paginatedFetchJP(`/cards?game=${jpGame()}&set=${encodeURIComponent(setSlug)}&include_price_history=false`);
+                        const url = `/cards?game=${jpGame()}&set=${encodeURIComponent(setSlug)}&include_price_history=false`;
+                        console.log('[JP openSet] Fetching:', JP_API + url);
+                        const raw = await paginatedFetchJP(url);
+                        console.log('[JP openSet] Got', raw.length, 'cards for', setSlug);
                         cards = raw.map(normalizeJPCard);
                     } else {
                         const raw = await paginatedFetchEN(`/cards?q=set.id:${encodeURIComponent(setSlug)}`);
