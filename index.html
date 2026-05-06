@@ -251,6 +251,8 @@
         .collection-sort select:hover { border-color: var(--border-hover); }
         .collection-sort select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-glow); }
         .collection-sort select option { background: var(--bg-card); }
+        .collection-sort .export-btn, .collection-sort .import-btn { padding: 0.5rem 0.9rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-size: 0.78rem; cursor: pointer; font-family: inherit; transition: all 0.2s; }
+        .collection-sort .export-btn:hover, .collection-sort .import-btn:hover { border-color: var(--border-hover); background: var(--accent); color: #fff; }
         .collection-list { display: flex; flex-direction: column; gap: 0.7rem; }
         .collection-item {
             background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
@@ -451,6 +453,9 @@
                     <option value="price">Price (High-Low)</option>
                     <option value="date">Date Added</option>
                 </select>
+                <button class="export-btn" onclick="exportCollection()" title="Export Collection">📤 Export</button>
+                <button class="import-btn" onclick="document.getElementById('importFile').click()" title="Import Collection">📥 Import</button>
+                <input type="file" id="importFile" accept=".json" style="display:none" onchange="importCollection(event)">
             </div>
             <div id="collectionContent"></div>
         </div>
@@ -1063,6 +1068,65 @@
         function saveCollection() {
             localStorage.setItem('chiniCollection_' + CACHE_V + '_' + currentLang, JSON.stringify(collection));
             localStorage.setItem('chiniPricing', JSON.stringify(pricingCache));
+        }
+
+        function exportCollection() {
+            const cards = Object.values(collection);
+            if (!cards.length) { alert('Collection is empty, nothing to export'); return; }
+            const data = {
+                version: CACHE_V,
+                lang: currentLang,
+                exportedAt: new Date().toISOString(),
+                totalUnique: cards.length,
+                cards: cards.map(c => ({
+                    id: c.id, name: c.name, setSlug: c.setSlug,
+                    image: c.image, quantity: c.quantity || 1,
+                    dateAdded: c.dateAdded || null
+                }))
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pokemon-collection-${currentLang}-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importCollection(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!data.cards || !Array.isArray(data.cards)) {
+                        alert('Invalid file format: no cards array found');
+                        return;
+                    }
+                    let imported = 0;
+                    let skipped = 0;
+                    for (const card of data.cards) {
+                        if (!card.id) { skipped++; continue; }
+                        collection[card.id] = {
+                            id: card.id,
+                            name: card.name || 'Unknown',
+                            setSlug: card.setSlug || '',
+                            image: card.image || '',
+                            quantity: card.quantity || 1,
+                            dateAdded: card.dateAdded || new Date().toISOString()
+                        };
+                        imported++;
+                    }
+                    saveCollection();
+                    renderCollection();
+                    alert(`Imported ${imported} cards (${skipped} skipped).`);
+                } catch (err) {
+                    alert('Error reading file: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
         }
 
         function renderCollection() {
