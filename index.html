@@ -471,6 +471,17 @@
         const JP_API = 'https://api.tcgdex.net/v2';
         const cardsPerPage = 100;
 
+        // Clean up old cache versions
+        (function cleanOldCache() {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith('chini') && !k.includes('v5')) {
+                    localStorage.removeItem(k);
+                    i--;
+                }
+            }
+        })();
+
         const CACHE_V = 'v5';
         let currentLang = localStorage.getItem('chiniLang') || 'en';
 
