@@ -543,7 +543,7 @@
         async function paginatedFetchJP(endpoint) {
             let all = [];
             let offset = 0;
-            const limit = 100;
+            const limit = 20;
             const sep = endpoint.includes('?') ? '&' : '?';
             while (true) {
                 const fullUrl = `${JP_API}${endpoint}${sep}limit=${limit}&offset=${offset}`;
