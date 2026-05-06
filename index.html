@@ -446,6 +446,7 @@
             <div class="collection-sort">
                 Sort by:
                 <select id="collectionSort" onchange="renderCollection()">
+                    <option value="pokedex">Pokedex Order</option>
                     <option value="name">Name A-Z</option>
                     <option value="price">Price (High-Low)</option>
                     <option value="date">Date Added</option>
@@ -1108,6 +1109,12 @@
 
         function sortCollection(cards, by) {
             return [...cards].sort((a, b) => {
+                if (by === 'pokedex') {
+                    const aNum = normalizeCardNumber(a.number);
+                    const bNum = normalizeCardNumber(b.number);
+                    if (aNum !== bNum) return aNum - bNum;
+                    return (a.setSlug || '').localeCompare(b.setSlug || '');
+                }
                 if (by === 'name') return a.name.localeCompare(b.name);
                 if (by === 'price') return (getPriceFromCache(b.id) || 0) - (getPriceFromCache(a.id) || 0);
                 if (by === 'date') return new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0);
