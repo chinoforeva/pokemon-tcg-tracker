@@ -323,10 +323,6 @@
         .card-modal-prices .price-value { color: #00d4aa; font-weight: 700; }
         .card-modal-prices .price-divider { height: 1px; background: var(--border); margin: 0.3rem 0; }
         .card-modal-prices .section-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 0.2rem; }
-        .rate-limit-bar {
-            position: fixed; bottom: 0; left: 0; right: 0; height: 3px;
-            background: var(--accent); z-index: 10001; transition: width 0.3s;
-        }
         @media (max-width: 768px) {
             .card-modal { padding: 1rem; }
             .card-modal-inner { max-width: 92vw; margin: 1.5rem auto; }
@@ -360,7 +356,6 @@
             </nav>
         </div>
     </header>
-    <div class="rate-limit-bar" id="rateLimitBar" style="width: 100%;"></div>
     <main>
         <div id="view-sets" class="view active">
             <div class="section-header">
@@ -452,8 +447,8 @@
         </div>
     </div>
     <script>
-        const API_BASE = 'https://api.tcgpricelookup.com/v1';
-        const API_KEY = 'tcg_98ba4fa4d7647b648406e9b456d896070b74c4c3a7b099d5';
+        const API_BASE = 'https://api.pokemontcg.io/v2';
+        const PAGE_SIZE = 250;
         const MAX_BATCH = 20;
 
         let allSets = [];
@@ -470,40 +465,19 @@
         let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache') || '{}');
         let openPriceDropdown = null;
         let searchTimeout = null;
-        let rateLimitRemaining = 200;
-        let rateLimitMax = 200;
 
         async function apiFetch(endpoint) {
             const r = await fetch(`${API_BASE}${endpoint}`, {
-                headers: { 'X-API-Key': API_KEY }
+                headers: { 'X-Api-Key': API_KEY }
             });
-            const remaining = r.headers.get('X-RateLimit-Remaining');
-            const limit = r.headers.get('X-RateLimit-Limit');
-            if (remaining != null) {
-                rateLimitRemaining = parseInt(remaining);
-                localStorage.setItem('chiniRateLimitRemaining', rateLimitRemaining);
-            }
-            if (limit != null) {
-                rateLimitMax = parseInt(limit);
-                localStorage.setItem('chiniRateLimitMax', rateLimitMax);
-            }
-            updateRateLimitBar();
             if (r.status === 429) {
                 throw new Error('Rate limit exceeded. Please try again later.');
             }
             if (!r.ok) {
                 const err = await r.json().catch(() => ({}));
-                throw new Error(err.error || `HTTP ${r.status}`);
+                throw new Error(err.message || `HTTP ${r.status}`);
             }
             return r.json();
-        }
-
-        function updateRateLimitBar() {
-            const pct = (rateLimitRemaining / rateLimitMax) * 100;
-            const bar = document.getElementById('rateLimitBar');
-            bar.style.width = pct + '%';
-            bar.style.background = pct > 50 ? 'var(--success)' : pct > 20 ? 'var(--warning)' : 'var(--accent)';
-            bar.title = `${rateLimitRemaining} / ${rateLimitMax} requests remaining`;
         }
 
         function fmt(n) {
@@ -511,75 +485,49 @@
             return '$' + parseFloat(n).toFixed(2);
         }
 
-        function getNmPrice(prices) {
-            return prices?.raw?.near_mint?.tcgplayer?.market || null;
+        function getBestPrice(tcg) {
+            if (!tcg?.prices) return null;
+            const prices = tcg.prices;
+            return prices.holofoil?.market || prices.normal?.market || prices.reverseHolofoil?.market || prices['1stEditionHolofoil']?.market || null;
         }
 
-        function getBestPrice(prices) {
-            if (!prices?.raw) return null;
-            for (const cond of ['near_mint', 'lightly_played', 'moderately_played']) {
-                const m = prices.raw[cond]?.tcgplayer?.market;
-                if (m) return m;
-            }
-            return null;
-        }
-
-        function buildPriceDropdownHTML(prices) {
-            if (!prices?.raw) return '<div class="price-row"><span class="price-label">No data</span><span class="price-value no-data">N/A</span></div>';
+        function buildPriceDropdownHTML(card) {
+            const prices = card?.tcgplayer?.prices;
+            if (!prices) return '<div class="price-row"><span class="price-label">No data</span><span class="price-value no-data">N/A</span></div>';
             let html = '<div class="price-market">TCGPlayer</div>';
-            const conds = {
-                'near_mint': 'NM', 'lightly_played': 'LP', 'moderately_played': 'MP',
-                'heavily_played': 'HP', 'damaged': 'DMG'
-            };
             let has = false;
-            for (const [k, v] of Object.entries(conds)) {
-                const tcg = prices.raw[k]?.tcgplayer;
-                if (tcg?.market) {
-                    html += `<div class="price-row"><span class="price-label">${v}</span><span class="price-value">${fmt(tcg.market)}</span></div>`;
+            const variants = [
+                ['holofoil', 'Holo'], ['normal', 'Normal'], ['reverseHolofoil', 'Reverse'], ['1stEditionHolofoil', '1st Ed.']
+            ];
+            for (const [key, label] of variants) {
+                if (prices[key]?.market) {
+                    html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${fmt(prices[key].market)}</span></div>`;
                     has = true;
                 }
             }
-            if (prices.raw.near_mint?.ebay?.avg_7d) {
-                html += '<div class="price-divider"></div>';
-                html += '<div class="price-ebay">eBay (7d avg)</div>';
-                html += `<div class="price-row"><span class="price-label">NM</span><span class="price-value">${fmt(prices.raw.near_mint.ebay.avg_7d)}</span></div>`;
-            }
-            if (!has && !prices.raw.near_mint?.ebay?.avg_7d) {
+            if (!has) {
                 html = '<div class="price-row"><span class="price-label">No data</span><span class="price-value no-data">N/A</span></div>';
             }
             return html;
         }
 
-        function buildModalPricesHTML(prices) {
-            if (!prices?.raw) return '';
+        function buildModalPricesHTML(card) {
+            const prices = card?.tcgplayer?.prices;
+            if (!prices) return '';
             let html = '<div class="section-label">TCGPlayer</div>';
-            const conds = {
-                'near_mint': 'Near Mint', 'lightly_played': 'Lightly Played',
-                'moderately_played': 'Moderately Played', 'heavily_played': 'Heavily Played', 'damaged': 'Damaged'
-            };
             let has = false;
-            for (const [k, v] of Object.entries(conds)) {
-                const tcg = prices.raw[k]?.tcgplayer;
-                if (tcg) {
+            const variants = [
+                ['holofoil', 'Holofoil'], ['normal', 'Normal'], ['reverseHolofoil', 'Reverse Holo'], ['1stEditionHolofoil', '1st Edition Holo']
+            ];
+            for (const [key, label] of variants) {
+                if (prices[key]) {
                     const parts = [];
-                    if (tcg.market) parts.push('Market: ' + fmt(tcg.market));
-                    if (tcg.low) parts.push('Low: ' + fmt(tcg.low));
-                    if (tcg.high) parts.push('High: ' + fmt(tcg.high));
+                    if (prices[key].market) parts.push('Market: ' + fmt(prices[key].market));
+                    if (prices[key].low) parts.push('Low: ' + fmt(prices[key].low));
+                    if (prices[key].high) parts.push('High: ' + fmt(prices[key].high));
                     if (parts.length) {
-                        html += `<div class="price-row"><span class="price-label">${v}</span><span class="price-value">${parts.join(' / ')}</span></div>`;
+                        html += `<div class="price-row"><span class="price-label">${label}</span><span class="price-value">${parts.join(' / ')}</span></div>`;
                         has = true;
-                    }
-                }
-            }
-            if (prices.graded) {
-                html += '<div class="price-divider"></div>';
-                html += '<div class="section-label">Graded (eBay 7d)</div>';
-                for (const [grader, grades] of Object.entries(prices.graded)) {
-                    for (const [grade, data] of Object.entries(grades)) {
-                        if (data?.ebay?.avg_7d) {
-                            html += `<div class="price-row"><span class="price-label">${grader.toUpperCase()} ${grade}</span><span class="price-value">${fmt(data.ebay.avg_7d)}</span></div>`;
-                            has = true;
-                        }
                     }
                 }
             }
@@ -588,234 +536,22 @@
 
         async function paginatedFetch(endpoint) {
             let all = [];
-            let offset = 0;
+            let page = 1;
             let hasMore = true;
             while (hasMore) {
                 const sep = endpoint.includes('?') ? '&' : '?';
-                const resp = await apiFetch(`${endpoint}${sep}limit=100&offset=${offset}`);
+                const resp = await apiFetch(`${endpoint}${sep}pageSize=${PAGE_SIZE}&page=${page}`);
                 const items = resp.data || [];
                 all = all.concat(items);
-                offset += 100;
-                if (items.length < 100) {
-                    hasMore = false;
-                } else if (resp.total != null) {
-                    hasMore = all.length < resp.total;
+                page++;
+                if (resp.totalCount != null) {
+                    hasMore = all.length < resp.totalCount;
                 } else {
-                    hasMore = false;
+                    hasMore = items.length >= PAGE_SIZE;
                 }
             }
             return all;
         }
-
-        const SET_RELEASE_DATES = {
-            'pokemon--me01-ancient-roar': '2026-01-23',
-            'pokemon--me02-ferocious-burst': '2025-10-17',
-            'pokemon--me03-mega-crush': '2025-07-18',
-            'pokemon--surging-sparks': '2025-05-02',
-            'pokemon--stellar-crown': '2024-09-13',
-            'pokemon--twilight-masquerade': '2024-05-24',
-            'pokemon--temporal-forces': '2024-03-22',
-            'pokemon--paradox-rift': '2023-11-03',
-            'pokemon--151': '2023-09-22',
-            'pokemon--paldea-evolved': '2023-06-09',
-            'pokemon--obsidian-flames': '2023-08-11',
-            'pokemon--scarlet-and-violet': '2023-03-31',
-            'pokemon--sv-promos': '2023-01-01',
-            'pokemon--crown-zenith': '2023-01-20',
-            'pokemon--silver-tempest': '2022-11-11',
-            'pokemon--lost-origin': '2022-09-09',
-            'pokemon--astral-radiance': '2022-05-27',
-            'pokemon--brilliant-stars': '2022-02-25',
-            'pokemon--fusion-strike': '2021-11-12',
-            'pokemon--celebrations': '2021-10-08',
-            'pokemon--shining-fates': '2021-02-19',
-            'pokemon--chilling-control': '2021-08-13',
-            'pokemon--evolving-skills': '2021-08-27',
-            'pokemon--battle-academy-2022': '2022-09-09',
-            'pokemon--battle-academy': '2020-11-13',
-            'pokemon--destined-rivals': '2022-02-25',
-            'pokemon--radiant-charizard-collection': '2022-05-20',
-            'pokemon--vivid-voltage': '2020-11-13',
-            'pokemon--darkness-ablaze': '2020-08-14',
-            'pokemon--champions-path': '2020-09-25',
-            'pokemon--sword-and-shield': '2020-02-07',
-            'pokemon--team-up': '2019-02-01',
-            'pokemon--unbroken-bonds': '2019-05-03',
-            'pokemon--unified-minds': '2019-08-02',
-            'pokemon--cosmic-eclipse': '2019-11-01',
-            'pokemon--hidden-fates': '2019-08-23',
-            'pokemon--detective-pikachu': '2019-04-05',
-            'pokemon--celestial-storm': '2018-08-03',
-            'pokemon--dragon-majesty': '2018-09-07',
-            'pokemon--forbidden-light': '2018-05-04',
-            'pokemon--ultra-prism': '2018-02-02',
-            'pokemon--burning-shadows': '2017-08-04',
-            'pokemon--shining-legends': '2017-10-06',
-            'pokemon--guardians-rising': '2017-05-05',
-            'pokemon--sun-and-moon': '2017-02-03',
-            'pokemon--steam-siege': '2016-08-03',
-            'pokemon--generations': '2016-02-22',
-            'pokemon--evolutions': '2016-10-02',
-            'pokemon--roaring-skies': '2016-05-02',
-            'pokemon--phantom-forces': '2015-11-04',
-            'pokemon--breakthrough': '2015-08-12',
-            'pokemon--breakpoint': '2015-10-07',
-            'pokemon--ancient-origins': '2016-02-03',
-            'pokemon--primal-clash': '2015-05-06',
-            'pokemon--furious-fists': '2014-08-13',
-            'pokemon--flashfire': '2014-05-07',
-            'pokemon--xy': '2014-02-05',
-            'pokemon--xy-genesis': '2014-02-05',
-            'pokemon--flashfire': '2014-05-07',
-            'pokemon--xy-fates-collide': '2016-05-02',
-            'pokemon--xy-steam-siege': '2016-08-03',
-            'pokemon--xy-roaring-skies': '2016-05-02',
-            'pokemon--xy-ancient-origins': '2016-02-03',
-            'pokemon--xy-primal-clash': '2015-05-06',
-            'pokemon--xy-breakthrough': '2015-08-12',
-            'pokemon--xy-breakpoint': '2015-10-07',
-            'pokemon--xy-phantom-forces': '2015-11-04',
-            'pokemon--xy-furious-fists': '2014-08-13',
-            'pokemon--xy-flashfire': '2014-05-07',
-            'pokemon--xy-evolutions': '2016-10-02',
-            'pokemon--legendary-treasures': '2013-11-06',
-            'pokemon--plasma-blast': '2013-09-04',
-            'pokemon--plasma-freeze': '2013-06-05',
-            'pokemon--plasma-storm': '2013-02-06',
-            'pokemon--dragon-majesty': '2013-09-04',
-            'pokemon--dragons-exalted': '2012-11-07',
-            'pokemon--dark-explorers': '2012-08-08',
-            'pokemon--boundaries-crossed': '2012-11-07',
-            'pokemon--emerging-powers': '2011-08-31',
-            'pokemon--noble-victories': '2011-11-16',
-            'pokemon--next-destinies': '2012-05-09',
-            'pokemon--black-and-white': '2011-04-25',
-            'pokemon--calling-of-legends': '2010-08-18',
-            'pokemon--triumphant': '2010-05-12',
-            'pokemon--undaunted': '2010-02-10',
-            'pokemon--unleashed': '2010-08-18',
-            'pokemon--heartgold-soulsilver': '2010-02-10',
-            'pokemon--arceus': '2009-11-04',
-            'pokemon--rising-rivals': '2009-05-16',
-            'pokemon--supreme-victors': '2009-08-19',
-            'pokemon--platinum': '2009-02-11',
-            'pokemon--stormfront': '2008-11-01',
-            'pokemon--legends-awakened': '2008-08-01',
-            'pokemon--majestic-dawn': '2008-05-01',
-            'pokemon--great-encounters': '2008-02-01',
-            'pokemon--secret-wonders': '2007-10-01',
-            'pokemon--mysterious-treasures': '2007-08-01',
-            'pokemon--diamond-and-pearl': '2007-05-01',
-            'pokemon--dp-promos': '2007-05-01',
-            'pokemon--battle-frontier': '2007-02-14',
-            'pokemon--power-keepers': '2007-02-14',
-            'pokemon--dragon-frontiers': '2006-11-08',
-            'pokemon--crystal-guardians': '2006-08-30',
-            'pokemon--holon-phantoms': '2006-05-03',
-            'pokemon--legend-maker': '2006-02-13',
-            'pokemon--unseen-forces': '2005-08-22',
-            'pokemon--delta-crystal': '2005-10-31',
-            'pokemon--team-rocket-returns': '2004-11-01',
-            'pokemon--fire-red-and-leaf-green': '2004-09-01',
-            'pokemon--hidden-legends': '2004-06-14',
-            'pokemon--ex': '2003-07-01',
-            'pokemon--sandstorm': '2003-09-18',
-            'pokemon--ruby-and-sapphire': '2003-07-01',
-            'pokemon--team-magma-vs-team-aqua': '2004-03-15',
-            'pokemon--legendary-collection': '2004-05-24',
-            'pokemon--skyridge': '2003-05-12',
-            'pokemon--aquapolis': '2003-01-15',
-            'pokemon--expedition': '2002-09-15',
-            'pokemon--neo-destiny': '2002-02-24',
-            'pokemon--neo-revelation': '2001-09-21',
-            'pokemon--neo-discovery': '2001-06-01',
-            'pokemon--neo-genesis': '2000-12-16',
-            'pokemon--southern-islands': '2001-07-31',
-            'pokemon--gym-challenge': '2000-10-16',
-            'pokemon--gym-heroes': '2000-07-24',
-            'pokemon--neo-1': '2000-12-16',
-            'pokemon--fossil': '1999-10-10',
-            'pokemon--base-set-2': '1999-02-24',
-            'pokemon--jungle': '1999-06-16',
-            'pokemon--base-set': '1999-01-09',
-            'pokemon--base-set-shadowless': '1999-01-09',
-            'pokemon--team-rocket': '2000-04-24',
-            'pokemon--pokemon-promo': '1999-01-01',
-            'pokemon--wizards-black-star-promos': '1999-01-01',
-            'pokemon--jumbo-promos': '1999-01-01',
-            'pokemon--black-star-promos': '1999-01-01',
-            'pokemon--mcd-promos': '2012-01-01',
-            'pokemon--mcd-2012': '2012-01-01',
-            'pokemon--mcd-2013': '2013-01-01',
-            'pokemon--mcd-2014': '2014-01-01',
-            'pokemon--mcd-2015': '2015-01-01',
-            'pokemon--mcd-2016': '2016-01-01',
-            'pokemon--mcd-2017': '2017-01-01',
-            'pokemon--mcd-2018': '2018-01-01',
-            'pokemon--mcd-2019': '2019-01-01',
-            'pokemon--mcd-2020': '2020-01-01',
-            'pokemon--mcd-2021': '2021-01-01',
-            'pokemon--mcd-2022': '2022-01-01',
-            'pokemon--mcd-2023': '2023-01-01',
-            'pokemon--mcd-2024': '2024-01-01',
-            'pokemon--mcd-2025': '2025-01-01',
-            'pokemon--pop-series-1': '2004-03-01',
-            'pokemon--pop-series-2': '2004-08-01',
-            'pokemon--pop-series-3': '2005-01-01',
-            'pokemon--pop-series-4': '2005-08-01',
-            'pokemon--pop-series-5': '2006-03-01',
-            'pokemon--pop-series-6': '2006-08-01',
-            'pokemon--pop-series-7': '2007-03-01',
-            'pokemon--pop-series-8': '2007-08-01',
-            'pokemon--pop-series-9': '2008-03-01',
-            'pokemon--ex-promo': '2003-01-01',
-            'pokemon--pokemon-journal': '2004-01-01',
-            'pokemon--pokemon-card-game-pocket-promos': '2024-10-01',
-            'pokemon--miscellaneous-cards-and-products': '1999-01-01',
-            'pokemon--alternate-art-promos': '2023-01-01',
-            'pokemon--best-of-game': '2001-01-01',
-            'pokemon--battle-road-2004': '2004-01-01',
-            'pokemon--bw-trainer-kit-excadrill-and-zoroark': '2011-01-01',
-            'pokemon--arceus': '2009-11-04',
-            'pokemon--ash-vs-team-rocket-deck-kit-jp-exclusive': '2020-01-01',
-            'pokemon--cel-25': '2021-10-08',
-            'pokemon--starter-deck': '2007-01-01',
-            'pokemon--starter-deck-plus': '2007-01-01',
-            'pokemon--team-flare-secret-power': '2015-01-01',
-            'pokemon--temple-of-the-sea': '2006-01-01',
-            'pokemon--the-darkness-ablaze': '2020-08-14',
-            'pokemon--the-lost-origin': '2022-09-09',
-            'pokemon--unified-minds': '2019-08-02',
-            'pokemon--victory-star': '2018-05-04',
-            'pokemon--voltage-vortex': '2018-05-04',
-            'pokemon--v-star-universe': '2022-05-27',
-            'pokemon--sleeping-beast': '2019-05-03',
-            'pokemon--solar-storm': '2019-02-01',
-            'pokemon--silver-lance': '2018-08-03',
-            'pokemon--spectral-frost': '2024-05-24',
-            'pokemon--relic-forge': '2024-09-13',
-            'pokemon--prismatic-evolutions': '2024-09-13',
-            'pokemon--luminescent-legends': '2024-09-13',
-            'pokemon--ghost-haunting': '2024-09-13',
-            'pokemon--mew': '2023-09-22',
-            'pokemon--swsh-promos': '2020-01-01',
-            'pokemon--sun-and-moon-base': '2017-02-03',
-            'pokemon--xy-stormfront': '2014-01-01',
-            'pokemon--pokémon-go': '2022-07-01',
-            'pokemon--pokemon-e-card-collector-box': '2003-01-01',
-            'pokemon--rocket-rampage': '2004-01-01',
-            'pokemon--prize-pack': '2003-01-01',
-            'pokemon--platinum-arceus': '2009-11-04',
-            'pokemon--rises': '2007-01-01',
-            'pokemon--holon-phantoms': '2006-05-03',
-            'pokemon--legend-maker': '2006-02-13',
-            'pokemon--unseen-forces': '2005-08-22',
-            'pokemon--dragon': '2003-09-18',
-            'pokemon--sandstorm': '2003-09-18',
-            'pokemon--delta-crystal': '2005-10-31',
-            'pokemon--expedition': '2002-09-15',
-            'pokemon--skyridge': '2003-05-12'
-        };
 
         const POKEMON_DEX = {"bulbasaur":1,"ivysaur":2,"venusaur":3,"charmander":4,"charmeleon":5,"charizard":6,"squirtle":7,"wartortle":8,"blastoise":9,"caterpie":10,"metapod":11,"butterfree":12,"weedle":13,"kakuna":14,"beedrill":15,"pidgey":16,"pidgeotto":17,"pidgeot":18,"rattata":19,"raticate":20,"spearow":21,"fearow":22,"ekans":23,"arbok":24,"pikachu":25,"raichu":26,"sandshrew":27,"sandslash":28,"nidoran-f":29,"nidorina":30,"nidoqueen":31,"nidoran-m":32,"nidorino":33,"nidoking":34,"clefairy":35,"clefable":36,"vulpix":37,"ninetales":38,"jigglypuff":39,"wigglytuff":40,"zubat":41,"golbat":42,"oddish":43,"gloom":44,"vileplume":45,"paras":46,"parasect":47,"venonat":48,"venomoth":49,"diglett":50,"dugtrio":51,"meowth":52,"persian":53,"psyduck":54,"golduck":55,"mankey":56,"primeape":57,"growlithe":58,"arcanine":59,"poliwag":60,"poliwhirl":61,"poliwrath":62,"abra":63,"kadabra":64,"alakazam":65,"machop":66,"machoke":67,"machamp":68,"bellsprout":69,"weepinbell":70,"victreebel":71,"tentacool":72,"tentacruel":73,"geodude":74,"graveler":75,"golem":76,"ponyta":77,"rapidash":78,"slowpoke":79,"slowbro":80,"magnemite":81,"magneton":82,"farfetchd":83,"doduo":84,"dodrio":85,"seel":86,"dewgong":87,"grimer":88,"muk":89,"shellder":90,"cloyster":91,"gastly":92,"haunter":93,"gengar":94,"onix":95,"drowzee":96,"hypno":97,"krabby":98,"kingler":99,"voltorb":100,"electrode":101,"exeggcute":102,"exeggutor":103,"cubone":104,"marowak":105,"hitmonlee":106,"hitmonchan":107,"lickitung":108,"koffing":109,"weezing":110,"rhyhorn":111,"rhydon":112,"chansey":113,"tangela":114,"kangaskhan":115,"horsea":116,"seadra":117,"goldeen":118,"seaking":119,"staryu":120,"starmie":121,"mr-mime":122,"scyther":123,"jynx":124,"electabuzz":125,"magmar":126,"pinsir":127,"tauros":128,"magikarp":129,"gyarados":130,"lapras":131,"ditto":132,"eevee":133,"vaporeon":134,"jolteon":135,"flareon":136,"porygon":137,"omanyte":138,"omastar":139,"kabuto":140,"kabutops":141,"aerodactyl":142,"snorlax":143,"articuno":144,"zapdos":145,"moltres":146,"dratini":147,"dragonair":148,"dragonite":149,"mewtwo":150,"mew":151,"chikorita":152,"bayleef":153,"meganium":154,"cyndaquil":155,"quilava":156,"typhlosion":157,"totodile":158,"croconaw":159,"feraligatr":160,"sentret":161,"furret":162,"hoothoot":163,"noctowl":164,"ledyba":165,"ledian":166,"spinarak":167,"ariados":168,"crobat":169,"chinchou":170,"lanturn":171,"pichu":172,"cleffa":173,"igglybuff":174,"togepi":175,"togetic":176,"natu":177,"xatu":178,"mareep":179,"flaaffy":180,"ampharos":181,"bellossom":182,"marill":183,"azumarill":184,"sudowoodo":185,"politoed":186,"hoppip":187,"skiploom":188,"jumpluff":189,"aipom":190,"sunkern":191,"sunflora":192,"yanma":193,"wooper":194,"quagsire":195,"espeon":196,"umbreon":197,"murkrow":198,"slowking":199,"misdreavus":200,"unown":201,"wobbuffet":202,"girafarig":203,"pineco":204,"forretress":205,"dunsparce":206,"gligar":207,"steelix":208,"snubbull":209,"granbull":210,"qwilfish":211,"scizor":212,"shuckle":213,"heracross":214,"sneasel":215,"teddiursa":216,"ursaring":217,"slugma":218,"magcargo":219,"swinub":220,"piloswine":221,"corsola":222,"remoraid":223,"octillery":224,"delibird":225,"mantine":226,"skarmory":227,"houndour":228,"houndoom":229,"kingdra":230,"phanpy":231,"donphan":232,"porygon2":233,"stantler":234,"smeargle":235,"tyrogue":236,"hitmontop":237,"smoochum":238,"elekid":239,"magby":240,"miltank":241,"blissey":242,"raikou":243,"entei":244,"suicune":245,"larvitar":246,"pupitar":247,"tyranitar":248,"lugia":249,"ho-oh":250,"celebi":251,"treecko":252,"grovyle":253,"sceptile":254,"torchic":255,"combusken":256,"blaziken":257,"mudkip":258,"marshtomp":259,"swampert":260,"poochyena":261,"mightyena":262,"zigzagoon":263,"linoone":264,"wurmple":265,"silcoon":266,"beautifly":267,"cascoon":268,"dustox":269,"lotad":270,"lombre":271,"ludicolo":272,"seedot":273,"nuzleaf":274,"shiftry":275,"taillow":276,"swellow":277,"wingull":278,"pelipper":279,"ralts":280,"kirlia":281,"gardevoir":282,"surskit":283,"masquerain":284,"shroomish":285,"breloom":286,"slakoth":287,"vigoroth":288,"slaking":289,"nincada":290,"ninjask":291,"shedinja":292,"whismur":293,"loudred":294,"exploud":295,"makuhita":296,"hariyama":297,"azurill":298,"nosepass":299,"skitty":300,"delcatty":301,"sableye":302,"mawile":303,"aron":304,"lairon":305,"aggron":306,"meditite":307,"medicham":308,"electrike":309,"manectric":310,"plusle":311,"minun":312,"volbeat":313,"illumise":314,"roselia":315,"gulpin":316,"swalot":317,"carvanha":318,"sharpedo":319,"wailmer":320,"wailord":321,"numel":322,"camerupt":323,"torkoal":324,"spoink":325,"grumpig":326,"spinda":327,"trapinch":328,"vibrava":329,"flygon":330,"cacnea":331,"cacturne":332,"swablu":333,"altaria":334,"zangoose":335,"seviper":336,"lunatone":337,"solrock":338,"barboach":339,"whiscash":340,"corphish":341,"crawdaunt":342,"baltoy":343,"claydol":344,"lileep":345,"cradily":346,"anorith":347,"armaldo":348,"feebas":349,"milotic":350,"castform":351,"kecleon":352,"shuppet":353,"banette":354,"duskull":355,"dusclops":356,"tropius":357,"chimecho":358,"absol":359,"wynaut":360,"snorunt":361,"glalie":362,"spheal":363,"sealeo":364,"walrein":365,"clamperl":366,"huntail":367,"gorebyss":368,"relicanth":369,"luvdisc":370,"bagon":371,"shelgon":372,"salamence":373,"beldum":374,"metang":375,"metagross":376,"regirock":377,"regice":378,"registeel":379,"latias":380,"latios":381,"kyogre":382,"groudon":383,"rayquaza":384,"jirachi":385,"deoxys-normal":386,"turtwig":387,"grotle":388,"torterra":389,"chimchar":390,"monferno":391,"infernape":392,"piplup":393,"prinplup":394,"empoleon":395,"starly":396,"staravia":397,"staraptor":398,"bidoof":399,"bibarel":400,"kricketot":401,"kricketune":402,"shinx":403,"luxio":404,"luxray":405,"budew":406,"roserade":407,"cranidos":408,"rampardos":409,"shieldon":410,"bastiodon":411,"burmy":412,"wormadam-plant":413,"mothim":414,"combee":415,"vespiquen":416,"pachirisu":417,"buizel":418,"floatzel":419,"cherubi":420,"cherrim":421,"shellos":422,"gastrodon":423,"ambipom":424,"drifloon":425,"drifblim":426,"buneary":427,"lopunny":428,"mismagius":429,"honchkrow":430,"glameow":431,"purugly":432,"chingling":433,"stunky":434,"skuntank":435,"bronzor":436,"bronzong":437,"bonsly":438,"mime-jr":439,"happiny":440,"chatot":441,"spiritomb":442,"gible":443,"gabite":444,"garchomp":445,"munchlax":446,"riolu":447,"lucario":448,"hippopotas":449,"hippowdon":450,"skorupi":451,"drapion":452,"croagunk":453,"toxicroak":454,"carnivine":455,"finneon":456,"lumineon":457,"mantyke":458,"snover":459,"abomasnow":460,"weavile":461,"magnezone":462,"lickilicky":463,"rhyperior":464,"tangrowth":465,"electivire":466,"magmortar":467,"togekiss":468,"yanmega":469,"leafeon":470,"glaceon":471,"gliscor":472,"mamoswine":473,"porygon-z":474,"gallade":475,"probopass":476,"dusknoir":477,"froslass":478,"rotom":479,"uxie":480,"mesprit":481,"azelf":482,"dialga":483,"palkia":484,"heatran":485,"regigigas":486,"giratina-altered":487,"cresselia":488,"phione":489,"manaphy":490,"darkrai":491,"shaymin-land":492,"arceus":493,"victini":494,"snivy":495,"servine":496,"serperior":497,"tepig":498,"pignite":499,"emboar":500,"oshawott":501,"dewott":502,"samurott":503,"patrat":504,"watchog":505,"lillipup":506,"herdier":507,"stoutland":508,"purrloin":509,"liepard":510,"pansage":511,"simisage":512,"pansear":513,"simisear":514,"panpour":515,"simipour":516,"munna":517,"musharna":518,"pidove":519,"tranquill":520,"unfezant":521,"blitzle":522,"zebstrika":523,"roggenrola":524,"boldore":525,"gigalith":526,"woobat":527,"swoobat":528,"drilbur":529,"excadrill":530,"audino":531,"timburr":532,"gurdurr":533,"conkeldurr":534,"tympole":535,"palpitoad":536,"seismitoad":537,"throh":538,"sawk":539,"sewaddle":540,"swadloon":541,"leavanny":542,"venipede":543,"whirlipede":544,"scolipede":545,"cottonee":546,"whimsicott":547,"petilil":548,"lilligant":549,"basculin-red-striped":550,"sandile":551,"krokorok":552,"krookodile":553,"darumaka":554,"darmanitan-standard":555,"maractus":556,"dwebble":557,"crustle":558,"scraggy":559,"scrafty":560,"sigilyph":561,"yamask":562,"cofagrigus":563,"tirtouga":564,"carracosta":565,"archen":566,"archeops":567,"trubbish":568,"garbodor":569,"zorua":570,"zoroark":571,"minccino":572,"cinccino":573,"gothita":574,"gothorita":575,"gothitelle":576,"solosis":577,"duosion":578,"reuniclus":579,"ducklett":580,"swanna":581,"vanillite":582,"vanillish":583,"vanilluxe":584,"deerling":585,"sawsbuck":586,"emolga":587,"karrablast":588,"escavalier":589,"foongus":590,"amoonguss":591,"frillish-male":592,"jellicent-male":593,"alomomola":594,"joltik":595,"galvantula":596,"ferroseed":597,"ferrothorn":598,"klink":599,"klang":600,"klinklang":601,"tynamo":602,"eelektrik":603,"eelektross":604,"elgyem":605,"beheeyem":606,"litwick":607,"lampent":608,"chandelure":609,"axew":610,"fraxure":611,"haxorus":612,"cubchoo":613,"beartic":614,"cryogonal":615,"shelmet":616,"accelgor":617,"stunfisk":618,"mienfoo":619,"mienshao":620,"druddigon":621,"golett":622,"golurk":623,"pawniard":624,"bisharp":625,"bouffalant":626,"rufflet":627,"braviary":628,"vullaby":629,"mandibuzz":630,"heatmor":631,"durant":632,"deino":633,"zweilous":634,"hydreigon":635,"larvesta":636,"volcarona":637,"cobalion":638,"terrakion":639,"virizion":640,"tornadus-incarnate":641,"thundurus-incarnate":642,"reshiram":643,"zekrom":644,"landorus-incarnate":645,"kyurem":646,"keldeo-ordinary":647,"meloetta-aria":648,"genesect":649,"chespin":650,"quilladin":651,"chesnaught":652,"fennekin":653,"braixen":654,"delphox":655,"froakie":656,"frogadier":657,"greninja":658,"bunnelby":659,"diggersby":660,"fletchling":661,"fletchinder":662,"talonflame":663,"scatterbug":664,"spewpa":665,"vivillon":666,"litleo":667,"pyroar-male":668,"flabebe":669,"floette":670,"florges":671,"skiddo":672,"gogoat":673,"pancham":674,"pangoro":675,"furfrou":676,"espurr":677,"meowstic-male":678,"honedge":679,"doublade":680,"aegislash-shield":681,"spritzee":682,"aromatisse":683,"swirlix":684,"slurpuff":685,"inkay":686,"malamar":687,"binacle":688,"barbaracle":689,"skrelp":690,"dragalge":691,"clauncher":692,"clawitzer":693,"helioptile":694,"heliolisk":695,"tyrunt":696,"tyrantrum":697,"amaura":698,"aurorus":699,"sylveon":700,"hawlucha":701,"dedenne":702,"carbink":703,"goomy":704,"sliggoo":705,"goodra":706,"klefki":707,"phantump":708,"trevenant":709,"pumpkaboo-average":710,"gourgeist-average":711,"bergmite":712,"avalugg":713,"noibat":714,"noivern":715,"xerneas":716,"yveltal":717,"zygarde-50":718,"diancie":719,"hoopa":720,"volcanion":721,"rowlet":722,"dartrix":723,"decidueye":724,"litten":725,"torracat":726,"incineroar":727,"popplio":728,"brionne":729,"primarina":730,"pikipek":731,"trumbeak":732,"toucannon":733,"yungoos":734,"gumshoos":735,"grubbin":736,"charjabug":737,"vikavolt":738,"crabrawler":739,"crabominable":740,"oricorio-baile":741,"cutiefly":742,"ribombee":743,"rockruff":744,"lycanroc-midday":745,"wishiwashi-solo":746,"mareanie":747,"toxapex":748,"mudbray":749,"mudsdale":750,"dewpider":751,"araquanid":752,"fomantis":753,"lurantis":754,"morelull":755,"shiinotic":756,"salandit":757,"salazzle":758,"stufful":759,"bewear":760,"bounsweet":761,"steenee":762,"tsareena":763,"comfey":764,"oranguru":765,"passimian":766,"wimpod":767,"golisopod":768,"sandygast":769,"palossand":770,"pyukumuku":771,"type-null":772,"silvally":773,"minior-red-meteor":774,"komala":775,"turtonator":776,"togedemaru":777,"mimikyu-disguised":778,"bruxish":779,"drampa":780,"dhelmise":781,"jangmo-o":782,"hakamo-o":783,"kommo-o":784,"tapu-koko":785,"tapu-lele":786,"tapu-bulu":787,"tapu-fini":788,"cosmog":789,"cosmoem":790,"solgaleo":791,"lunala":792,"nihilego":793,"buzzwole":794,"pheromosa":795,"xurkitree":796,"celesteela":797,"kartana":798,"guzzlord":799,"necrozma":800,"magearna":801,"marshadow":802,"poipole":803,"naganadel":804,"stakataka":805,"blacephalon":806,"zeraora":807,"meltan":808,"melmetal":809,"grookey":810,"thwackey":811,"rillaboom":812,"scorbunny":813,"raboot":814,"cinderace":815,"sobble":816,"drizzile":817,"inteleon":818,"skwovet":819,"greedent":820,"rookidee":821,"corvisquire":822,"corviknight":823,"blipbug":824,"dottler":825,"orbeetle":826,"nickit":827,"thievul":828,"gossifleur":829,"eldegoss":830,"wooloo":831,"dubwool":832,"chewtle":833,"drednaw":834,"yamper":835,"boltund":836,"rolycoly":837,"carkol":838,"coalossal":839,"applin":840,"flapple":841,"appletun":842,"silicobra":843,"sandaconda":844,"cramorant":845,"arrokuda":846,"barraskewda":847,"toxel":848,"toxtricity-amped":849,"sizzlipede":850,"centiskorch":851,"clobbopus":852,"grapploct":853,"sinistea":854,"polteageist":855,"hatenna":856,"hattrem":857,"hatterene":858,"impidimp":859,"morgrem":860,"grimmsnarl":861,"obstagoon":862,"perrserker":863,"cursola":864,"sirfetchd":865,"mr-rime":866,"runerigus":867,"milcery":868,"alcremie":869,"falinks":870,"pincurchin":871,"snom":872,"frosmoth":873,"stonjourner":874,"eiscue-ice":875,"indeedee-male":876,"morpeko-full-belly":877,"cufant":878,"copperajah":879,"dracozolt":880,"arctozolt":881,"dracovish":882,"arctovish":883,"duraludon":884,"dreepy":885,"drakloak":886,"dragapult":887,"zacian":888,"zamazenta":889,"eternatus":890,"kubfu":891,"urshifu-single-strike":892,"zarude":893,"regieleki":894,"regidrago":895,"glastrier":896,"spectrier":897,"calyrex":898,"wyrdeer":899,"kleavor":900,"ursaluna":901,"basculegion-male":902,"sneasler":903,"overqwil":904,"enamorus-incarnate":905,"sprigatito":906,"floragato":907,"meowscarada":908,"fuecoco":909,"crocalor":910,"skeledirge":911,"quaxly":912,"quaxwell":913,"quaquaval":914,"lechonk":915,"oinkologne-male":916,"tarountula":917,"spidops":918,"nymble":919,"lokix":920,"pawmi":921,"pawmo":922,"pawmot":923,"tandemaus":924,"maushold-family-of-four":925,"fidough":926,"dachsbun":927,"smoliv":928,"dolliv":929,"arboliva":930,"squawkabilly-green-plumage":931,"nacli":932,"naclstack":933,"garganacl":934,"charcadet":935,"armarouge":936,"ceruledge":937,"tadbulb":938,"bellibolt":939,"wattrel":940,"kilowattrel":941,"maschiff":942,"mabosstiff":943,"shroodle":944,"grafaiai":945,"bramblin":946,"brambleghast":947,"toedscool":948,"toedscruel":949,"klawf":950,"capsakid":951,"scovillain":952,"rellor":953,"rabsca":954,"flittle":955,"espathra":956,"tinkatink":957,"tinkatuff":958,"tinkaton":959,"wiglett":960,"wugtrio":961,"bombirdier":962,"finizen":963,"palafin-zero":964,"varoom":965,"revavroom":966,"cyclizar":967,"orthworm":968,"glimmet":969,"glimmora":970,"greavard":971,"houndstone":972,"flamigo":973,"cetoddle":974,"cetitan":975,"veluza":976,"dondozo":977,"tatsugiri-curly":978,"annihilape":979,"clodsire":980,"farigiraf":981,"dudunsparce-two-segment":982,"kingambit":983,"great-tusk":984,"scream-tail":985,"brute-bonnet":986,"flutter-mane":987,"slither-wing":988,"sandy-shocks":989,"iron-treads":990,"iron-bundle":991,"iron-hands":992,"iron-jugulis":993,"iron-moth":994,"iron-thorns":995,"frigibax":996,"arctibax":997,"baxcalibur":998,"gimmighoul":999,"gholdengo":1000,"wo-chien":1001,"chien-pao":1002,"ting-lu":1003,"chi-yu":1004,"roaring-moon":1005,"iron-valiant":1006,"koraidon":1007,"miraidon":1008,"walking-wake":1009,"iron-leaves":1010,"dipplin":1011,"poltchageist":1012,"sinistcha":1013,"okidogi":1014,"munkidori":1015,"fezandipiti":1016,"ogerpon":1017,"archaludon":1018,"hydrapple":1019,"gouging-fire":1020,"raging-bolt":1021,"iron-boulder":1022,"iron-crown":1023,"terapagos":1024,"pecharunt":1025};
 
@@ -843,15 +579,16 @@
                 if (cached && cachedTime && (now - parseInt(cachedTime)) < 3600000) {
                     allSets = JSON.parse(cached);
                 } else {
-                    allSets = await paginatedFetch('/sets?game=pokemon');
+                    const sets = await paginatedFetch('/sets');
+                    allSets = sets.map(s => ({
+                        id: s.id, name: s.name, total: s.total,
+                        releasedAt: s.releaseDate || '1900-01-01',
+                        logo: s.images?.logo || s.images?.symbol || null
+                    }));
                     localStorage.setItem('chiniSets', JSON.stringify(allSets));
                     localStorage.setItem('chiniSetsTime', now.toString());
                 }
-                allSets.sort((a, b) => {
-                    const da = SET_RELEASE_DATES[a.slug] || '1900-01-01';
-                    const db = SET_RELEASE_DATES[b.slug] || '1900-01-01';
-                    return db.localeCompare(da);
-                });
+                allSets.sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
                 renderSets(allSets);
             } catch (e) {
                 el.innerHTML = `<div class="error-msg">${e.message}</div>`;
@@ -869,13 +606,14 @@
             if (!sets.length) { el.innerHTML = '<div class="empty-state"><h3>No sets found</h3></div>'; return; }
             el.innerHTML = `<div class="expansions-grid">${sets.map(s => {
                 const owned = Object.values(collection).filter(c => c.setId === s.id).length;
-                return `<div class="expansion-card" onclick="openSet('${s.id}','${s.slug.replace(/'/g, "\\'")}')">
-                    <div class="expansion-logo-wrap">
-                        <span class="set-label">${s.name}</span>
-                    </div>
+                const logoHTML = s.logo
+                    ? `<img src="${s.logo}" alt="${s.name}" onerror="this.style.display='none'" style="max-height:70px;max-width:85%;object-fit:contain;">`
+                    : `<span class="set-label">${s.name}</span>`;
+                return `<div class="expansion-card" onclick="openSet('${s.id}')">
+                    <div class="expansion-logo-wrap">${logoHTML}</div>
                     <div class="expansion-info">
                         <div class="expansion-meta">
-                            <span>${s.count} cards</span>
+                            <span>${s.total} cards</span>
                             ${owned > 0 ? `<span class="expansion-badge">${owned} owned</span>` : ''}
                         </div>
                     </div>
@@ -892,52 +630,55 @@
             return number.split('/')[0].replace(/^0+/, '') || '0';
         }
 
-        async function openSet(setId, setSlug) {
-            currentSet = { id: setId, slug: setSlug };
+        async function openSet(setId) {
+            currentSet = { id: setId };
             document.getElementById('setCardsTitle').textContent = 'Loading...';
             document.getElementById('setCardsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading cards...</span></div>';
             showView('set-cards');
             try {
                 let cards;
-                const cacheKey = setSlug;
+                const cacheKey = setId;
                 const cached = setCardsCache[cacheKey];
                 const cacheTime = localStorage.getItem('chiniSetCardsTime_' + cacheKey);
                 const now = Date.now();
                 if (cached && cacheTime && (now - parseInt(cacheTime)) < 86400000) {
                     cards = cached;
                 } else {
-                    cards = await paginatedFetch(`/cards/search?game=pokemon&set=${encodeURIComponent(setSlug)}`);
+                    cards = await paginatedFetch(`/cards?q=set.id:${setId}`);
                     setCardsCache[cacheKey] = cards;
                     localStorage.setItem('chiniSetCardsCache', JSON.stringify(setCardsCache));
                     localStorage.setItem('chiniSetCardsTime_' + cacheKey, now.toString());
                 }
-                    const valid = cards.filter(c => c.name && c.number && c.rarity && c.variant);
-                const excluded = cards.filter(c => !(c.name && c.number && c.rarity && c.variant));
+                const valid = cards.filter(c => c.supertypes?.includes('Pokémon') && c.number && c.rarity);
+                const excluded = cards.filter(c => !(c.supertypes?.includes('Pokémon') && c.number && c.rarity));
                 const all = valid.map(c => ({
-                    id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
-                    number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
-                    image: c.image_url || '', setId: c.set?.id || '',
-                    setName: c.set?.name || '', prices: c.prices || null,
-                    updatedAt: c.updated_at || null, dexId: getDexId(c.name)
+                    id: c.id, name: c.name, number: c.number || '',
+                    rarity: c.rarity || '', supertypes: c.supertypes || [],
+                    subtypes: c.subtypes || [],
+                    image: c.images?.large || c.images?.small || '',
+                    imageSmall: c.images?.small || '',
+                    setId: c.set?.id || '', setName: c.set?.name || '',
+                    tcgplayer: c.tcgplayer || null,
+                    dexId: getDexId(c.name)
                 }));
-                excludedCards = excluded.map(c => ({
-                    id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name || 'Unknown',
-                    number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
-                    image: c.image_url || '', setId: c.set?.id || '',
-                    setName: c.set?.name || '', prices: c.prices || null,
-                    updatedAt: c.updated_at || null, dexId: getDexId(c.name)
-                })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 const dedupedMap = {};
                 for (const c of all) {
-                    const key = c.image + '|' + c.variant;
-                    if (!dedupedMap[key]) {
-                        dedupedMap[key] = c;
-                    }
+                    const key = c.image + '|' + c.rarity;
+                    if (!dedupedMap[key]) dedupedMap[key] = c;
                 }
                 currentSetCards = Object.values(dedupedMap).sort((a, b) => {
                     if (a.dexId && b.dexId && a.dexId !== b.dexId) return a.dexId - b.dexId;
                     return parseInt(getCardBaseNumber(a.number) || 0) - parseInt(getCardBaseNumber(b.number) || 0);
                 });
+                excludedCards = excluded.map(c => ({
+                    id: c.id, name: c.name || 'Unknown', number: c.number || '',
+                    rarity: c.rarity || '', supertypes: c.supertypes || [],
+                    subtypes: c.subtypes || [],
+                    image: c.images?.large || c.images?.small || '',
+                    imageSmall: c.images?.small || '',
+                    setId: c.set?.id || '', setName: c.set?.name || '',
+                    tcgplayer: c.tcgplayer || null, dexId: getDexId(c.name)
+                })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 allCardsForSet = currentSetCards.concat(excludedCards);
                 currentPage = 1;
                 showExcluded = false;
@@ -948,7 +689,7 @@
                 } else {
                     toggleBtn.style.display = 'none';
                 }
-                const setName = currentSetCards[0]?.setName || setSlug;
+                const setName = currentSetCards[0]?.setName || setId;
                 document.getElementById('setCardsTitle').textContent = setName;
                 populateSetFilters();
                 renderSetPage();
@@ -1061,7 +802,6 @@
         function cardHTML(c, showActions = true, isExcluded = false) {
             const owned = !!collection[c.id];
             const img = c.image;
-            const safeName = c.name.replace(/'/g, "\\'");
             const dexStr = c.dexId ? '#' + String(c.dexId).padStart(3, '0') : '';
             return `<div class="card-tcg ${owned ? 'owned' : ''} ${isExcluded ? 'excluded' : ''}" data-card-id="${c.id}">
                 <button class="price-btn" onclick="togglePrice('${c.id}', event)">$</button>
@@ -1072,7 +812,7 @@
                 </div>
                 <div class="card-details">
                     <div class="card-name">${c.name}</div>
-                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}${c.variant && c.variant !== 'Normal' ? ' · ' + c.variant : ''}</div>
+                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}</div>
                 </div>
                 ${showActions ? `<div class="card-actions">${owned
                     ? `<button class="remove-btn" onclick="toggleCard('${c.id}')">Remove</button>`
@@ -1084,7 +824,6 @@
         function searchHTML(c) {
             const owned = !!collection[c.id];
             const img = c.image;
-            const safeName = c.name.replace(/'/g, "\\'");
             const dexStr = c.dexId ? '#' + String(c.dexId).padStart(3, '0') : '';
             return `<div class="card-tcg ${owned ? 'owned' : ''}">
                 <button class="price-btn" onclick="togglePrice('${c.id}', event)">$</button>
@@ -1095,7 +834,7 @@
                 </div>
                 <div class="card-details">
                     <div class="card-name">${c.name}</div>
-                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.setName || ''} ${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}${c.variant && c.variant !== 'Normal' ? ' · ' + c.variant : ''}</div>
+                    <div class="card-meta">${dexStr ? dexStr + ' ' : ''}${c.setName || ''} ${c.number ? '#' + c.number + ' ' : ''}${c.rarity || ''}</div>
                 </div>
                 <div class="card-actions">
                     ${owned
@@ -1117,21 +856,20 @@
             document.getElementById('searchContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
             searchTimeout = setTimeout(async () => {
                 try {
-                    const cards = await paginatedFetch(`/cards/search?q=${encodeURIComponent(q)}&game=pokemon`);
-                const all = cards.filter(c => c.name && c.number && c.rarity && c.variant)
+                    const cards = await paginatedFetch(`/cards?q=name:"${encodeURIComponent(q)}*"`);
+                    const all = cards.filter(c => c.supertypes?.includes('Pokémon') && c.number && c.rarity)
                         .map(c => ({
-                            id: c.id, tcgplayerId: c.tcgplayer_id, name: c.name,
-                            number: c.number || '', rarity: c.rarity || '', variant: c.variant || 'Normal',
-                            image: c.image_url || '', setId: c.set?.id || '',
-                            setName: c.set?.name || '', prices: c.prices || null,
-                            dexId: getDexId(c.name)
+                            id: c.id, name: c.name, number: c.number || '',
+                            rarity: c.rarity || '', supertypes: c.supertypes || [], subtypes: c.subtypes || [],
+                            image: c.images?.large || c.images?.small || '',
+                            imageSmall: c.images?.small || '',
+                            setId: c.set?.id || '', setName: c.set?.name || '',
+                            tcgplayer: c.tcgplayer || null, dexId: getDexId(c.name)
                         }));
                     const dedupedMap = {};
                     for (const c of all) {
-                        const key = c.image + '|' + c.variant;
-                        if (!dedupedMap[key]) {
-                            dedupedMap[key] = c;
-                        }
+                        const key = c.image + '|' + c.rarity;
+                        if (!dedupedMap[key]) dedupedMap[key] = c;
                     }
                     searchResults = Object.values(dedupedMap).sort((a, b) => {
                         if (a.dexId && b.dexId && a.dexId !== b.dexId) return a.dexId - b.dexId;
@@ -1190,9 +928,9 @@
             for (let i = 0; i < ids.length; i += MAX_BATCH) {
                 const batch = ids.slice(i, i + MAX_BATCH);
                 try {
-                    const resp = await apiFetch(`/cards/search?ids=${batch.join(',')}`);
+                    const resp = await apiFetch(`/cards?ids=${batch.join(',')}`);
                     for (const c of resp.data || []) {
-                        pricingCache[c.id] = c.prices || null;
+                        pricingCache[c.id] = c.tcgplayer || null;
                     }
                 } catch (e) { console.warn('Batch price fetch failed:', e); }
             }
@@ -1282,14 +1020,14 @@
             let c = currentSetCards.find(x => x.id === cardId) || searchResults.find(x => x.id === cardId);
             const colCard = collection[cardId];
             if (!c && colCard) {
-                c = { id: colCard.id, name: colCard.name, dexId: colCard.dexId };
+                c = { id: colCard.id, name: colCard.name, dexId: colCard.dexId, tcgplayer: pricingCache[cardId] || null };
             }
             if (!c) return;
             document.getElementById('modalImg').src = c.image || '';
             const dexStr = c.dexId ? '#P' + String(c.dexId).padStart(3, '0') : '';
             document.getElementById('modalName').textContent = c.name;
-            document.getElementById('modalMeta').textContent = [dexStr, c.setName, c.number ? '#' + c.number : '', c.rarity, c.variant && c.variant !== 'Normal' ? c.variant : null].filter(Boolean).join(' · ');
-            document.getElementById('modalPrices').innerHTML = buildModalPricesHTML(c.prices);
+            document.getElementById('modalMeta').textContent = [dexStr, c.setName, c.number ? '#' + c.number : '', c.rarity].filter(Boolean).join(' · ');
+            document.getElementById('modalPrices').innerHTML = buildModalPricesHTML(c);
             document.getElementById('cardModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }
@@ -1320,15 +1058,15 @@
             dd.classList.add('show');
             openPriceDropdown = { id: cardId };
             const c = currentSetCards.find(x => x.id === cardId) || searchResults.find(x => x.id === cardId);
-            if (c?.prices) { dd.innerHTML = buildPriceDropdownHTML(c.prices); return; }
-            if (pricingCache[cardId]) { dd.innerHTML = buildPriceDropdownHTML(pricingCache[cardId]); return; }
+            if (c?.tcgplayer) { dd.innerHTML = buildPriceDropdownHTML(c); return; }
+            if (pricingCache[cardId]) { dd.innerHTML = buildPriceDropdownHTML({ tcgplayer: pricingCache[cardId] }); return; }
             btn.classList.add('loading'); btn.textContent = '...';
             try {
                 const resp = await apiFetch(`/cards/${encodeURIComponent(cardId)}`);
-                const prices = resp?.prices || null;
-                pricingCache[cardId] = prices;
+                const card = resp.data;
+                pricingCache[cardId] = card.tcgplayer || null;
                 saveCollection();
-                dd.innerHTML = buildPriceDropdownHTML(prices);
+                dd.innerHTML = buildPriceDropdownHTML({ tcgplayer: pricingCache[cardId] });
             } catch (e) {
                 dd.innerHTML = '<div class="price-row"><span class="price-label">Error</span><span class="price-value no-data">!</span></div>';
             }
