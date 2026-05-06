@@ -707,19 +707,34 @@
                 } else {
                     if (currentLang === 'jp') {
                         const sets = await apiFetchJP('/ja/sets');
-                        allSets = sets.map(s => ({
+                        const briefSets = sets.map(s => ({
                             id: s.id, slug: s.id, name: s.name,
                             cardCount: s.cardCount?.total || 0,
                             releasedAt: s.releaseDate || '1900-01-01',
                             logo: s.logo || null,
                             symbol: s.symbol || null
                         }));
-                        allSets.sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
-                        setToSerie = {};
-                        for (const s of allSets) {
-                            const seriePrefix = extractSeriePrefix(s.slug);
-                            if (seriePrefix) setToSerie[s.slug] = seriePrefix;
+                        el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Fetching card details...</span></div>';
+                        const CHUNK = 10;
+                        for (let i = 0; i < briefSets.length; i += CHUNK) {
+                            const chunk = briefSets.slice(i, i + CHUNK);
+                            const results = await Promise.all(chunk.map(async (s) => {
+                                try {
+                                    const fullSet = await apiFetchJP(`/ja/sets/${s.id}`);
+                                    const withImage = fullSet.cards?.filter(c => c.image)?.length || 0;
+                                    if (fullSet.serie?.id) setToSerie[s.slug] = fullSet.serie.id;
+                                    return { ...s, cardCount: withImage };
+                                } catch {
+                                    return { ...s, cardCount: 0 };
+                                }
+                            }));
+                            for (const r of results) {
+                                const idx = briefSets.findIndex(b => b.slug === r.slug);
+                                if (idx !== -1) briefSets[idx] = r;
+                            }
                         }
+                        allSets = briefSets.filter(s => s.cardCount > 0);
+                        allSets.sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
                     } else {
                         const sets = await paginatedFetchEN('/sets');
                         allSets = sets.map(s => ({ id: s.id, slug: s.id, name: s.name, cardCount: s.total, releasedAt: s.releaseDate || '1900-01-01', logo: s.images?.logo || s.images?.symbol || null }));
