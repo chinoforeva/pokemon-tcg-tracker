@@ -328,6 +328,19 @@
             padding: 0.55rem 1.4rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
         }
         .modal-go-set:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0, 212, 170, 0.3); }
+        .lang-switch {
+            display: flex; align-items: center; margin-left: 0.5rem;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+            overflow: hidden; cursor: pointer;
+        }
+        .lang-btn {
+            padding: 0.5rem 0.7rem; background: transparent; border: none;
+            color: var(--text-muted); font-weight: 600; font-size: 0.72rem;
+            cursor: pointer; transition: all 0.25s; font-family: inherit; letter-spacing: 0.05em;
+        }
+        .lang-btn.active { background: var(--accent); color: white; }
+        .lang-btn:hover:not(.active) { color: var(--text-primary); background: var(--glass-strong); }
+        .lang-divider { width: 1px; height: 20px; background: var(--border); }
         @media (max-width: 768px) {
             .card-modal { padding: 1rem; }
             .card-modal-inner { max-width: 92vw; margin: 1.5rem auto; }
@@ -358,6 +371,11 @@
                 <button class="nav-btn active" id="btn-sets" onclick="showView('sets')">Sets</button>
                 <button class="nav-btn" id="btn-search" onclick="showView('search')">Search</button>
                 <button class="nav-btn" id="btn-collection" onclick="showView('collection')">Collection</button>
+                <div class="lang-switch">
+                    <button class="lang-btn active" id="langEN" onclick="switchLang('en')">EN</button>
+                    <div class="lang-divider"></div>
+                    <button class="lang-btn" id="langJP" onclick="switchLang('jp')">JP</button>
+                </div>
             </nav>
         </div>
     </header>
@@ -455,17 +473,41 @@
         const PAGE_SIZE = 250;
         const MAX_BATCH = 20;
 
+        const LANG_API = { en: 'English', jp: 'Japanese' };
+        let currentLang = localStorage.getItem('chiniLang') || 'en';
+
         let allSets = [];
         let currentSet = null;
         let currentSetCards = [];
         let currentPage = 1;
         let cardsPerPage = 100;
         let searchResults = [];
-        let collection = JSON.parse(localStorage.getItem('chiniCollection') || '{}');
+        let collection = JSON.parse(localStorage.getItem('chiniCollection_' + currentLang) || '{}');
         let pricingCache = JSON.parse(localStorage.getItem('chiniPricing') || '{}');
-        let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache') || '{}');
+        let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache_' + currentLang) || '{}');
         let openPriceDropdown = null;
         let searchTimeout = null;
+
+        function langQuery() { return `q=set.language:${LANG_API[currentLang]}`; }
+
+        function switchLang(lang) {
+            if (lang === currentLang) return;
+            currentLang = lang;
+            localStorage.setItem('chiniLang', lang);
+            document.getElementById('langEN').classList.toggle('active', lang === 'en');
+            document.getElementById('langJP').classList.toggle('active', lang === 'jp');
+            collection = JSON.parse(localStorage.getItem('chiniCollection_' + lang) || '{}');
+            setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache_' + lang) || '{}');
+            allSets = [];
+            currentSetCards = [];
+            searchResults = [];
+            document.getElementById('setSearch').value = '';
+            document.getElementById('globalSearch').value = '';
+            document.getElementById('setCardSearch').value = '';
+            document.getElementById('rarityFilter').value = '';
+            showView('sets');
+            loadSets();
+        }
 
         async function apiFetch(endpoint) {
             const r = await fetch(`${API_BASE}${endpoint}`, {
@@ -575,20 +617,20 @@
             const el = document.getElementById('setsContent');
             el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Loading sets...</span></div>';
             try {
-                const cached = localStorage.getItem('chiniSets');
-                const cachedTime = localStorage.getItem('chiniSetsTime');
+                const cached = localStorage.getItem('chiniSets_' + currentLang);
+                const cachedTime = localStorage.getItem('chiniSetsTime_' + currentLang);
                 const now = Date.now();
                 if (cached && cachedTime && (now - parseInt(cachedTime)) < 3600000) {
                     allSets = JSON.parse(cached);
                 } else {
-                    const sets = await paginatedFetch('/sets');
+                    const sets = await paginatedFetch(`/sets?${langQuery()}`);
                     allSets = sets.map(s => ({
                         id: s.id, name: s.name, total: s.total,
                         releasedAt: s.releaseDate || '1900-01-01',
                         logo: s.images?.logo || s.images?.symbol || null
                     }));
-                    localStorage.setItem('chiniSets', JSON.stringify(allSets));
-                    localStorage.setItem('chiniSetsTime', now.toString());
+                    localStorage.setItem('chiniSets_' + currentLang, JSON.stringify(allSets));
+                    localStorage.setItem('chiniSetsTime_' + currentLang, now.toString());
                 }
                 allSets.sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
                 renderSets(allSets);
@@ -639,16 +681,16 @@
             showView('set-cards');
             try {
                 let cards;
-                const cacheKey = setId;
+                const cacheKey = currentLang + '_' + setId;
                 const cached = setCardsCache[cacheKey];
                 const cacheTime = localStorage.getItem('chiniSetCardsTime_' + cacheKey);
                 const now = Date.now();
                 if (cached && cacheTime && (now - parseInt(cacheTime)) < 86400000) {
                     cards = cached;
                 } else {
-                    cards = await paginatedFetch(`/cards?q=set.id:${setId}`);
+                    cards = await paginatedFetch(`/cards?${langQuery()}&q=set.id:${setId}`);
                     setCardsCache[cacheKey] = cards;
-                    localStorage.setItem('chiniSetCardsCache', JSON.stringify(setCardsCache));
+                    localStorage.setItem('chiniSetCardsCache_' + currentLang, JSON.stringify(setCardsCache));
                     localStorage.setItem('chiniSetCardsTime_' + cacheKey, now.toString());
                 }
                 const all = cards.map(c => ({
@@ -821,7 +863,7 @@
             document.getElementById('searchContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Searching...</span></div>';
             searchTimeout = setTimeout(async () => {
                 try {
-                    const cards = await paginatedFetch(`/cards?q=name:*${encodeURIComponent(q)}*`, 2);
+                    const cards = await paginatedFetch(`/cards?${langQuery()}&q=name:*${encodeURIComponent(q)}*`, 2);
                     const all = cards.filter(c => c.number && c.rarity)
                         .map(c => ({
                             id: c.id, name: c.name, number: c.number || '',
@@ -903,7 +945,7 @@
         }
 
         function saveCollection() {
-            localStorage.setItem('chiniCollection', JSON.stringify(collection));
+            localStorage.setItem('chiniCollection_' + currentLang, JSON.stringify(collection));
             localStorage.setItem('chiniPricing', JSON.stringify(pricingCache));
         }
 
