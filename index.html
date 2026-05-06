@@ -483,7 +483,7 @@
             keys.forEach(k => localStorage.removeItem(k));
         })();
 
-        const CACHE_V = 'v5';
+        const CACHE_V = 'v6';
         const JP_SETS_WITH_IMAGES = new Set([
             'S12a','S9a','S9','S12',
             'SV4a','SV7a','SV2P','SV8a','SV6','SVLS','SVK','SV5a',
@@ -578,10 +578,11 @@
         }
 
         function normalizeJPCard(c) {
+            const rawImage = c.image || '';
             return {
                 id: c.id, name: c.name || 'Unknown', number: c.localId || '',
                 rarity: c.rarity || '', variant: '',
-                image: c.image || '',
+                image: rawImage ? rawImage + '/high.webp' : '',
                 setSlug: c.set?.id || (currentSet ? currentSet.slug : ''),
                 setName: c.set?.name || (currentSet ? currentSet.name : ''),
                 tcgplayer: null,
@@ -594,7 +595,7 @@
             const serie = setToSerie[setId] || '';
             const parts = cardId.split('-');
             const localId = parts[parts.length - 1];
-            return `https://assets.tcgdex.net/ja/${serie}/${setId}/${localId}`;
+            return `https://assets.tcgdex.net/ja/${serie}/${setId}/${localId}/high.webp`;
         }
 
         function extractSeriePrefix(setId) {
@@ -982,7 +983,7 @@
                         cards = filtered.map(c => {
                             const setId = c.id.split('-').slice(0, -1).join('-');
                             const serie = setToSerie[setId] || extractSeriePrefix(setId);
-                            const image = serie ? `https://assets.tcgdex.net/ja/${serie}/${setId}/${c.localId}` : '';
+                            const image = serie ? `https://assets.tcgdex.net/ja/${serie}/${setId}/${c.localId}/high.webp` : '';
                             return {
                                 id: c.id, name: c.name || 'Unknown', number: c.localId || '',
                                 rarity: '', variant: '', image,
