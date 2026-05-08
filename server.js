@@ -7,6 +7,7 @@ const PORT = 8080;
 const API_BASE = 'https://api.tcgapi.dev/v1';
 const API_KEY = 'tcg_live_7b9bf797b73c3fbe85ccaf8b1dd5998c8e24042f';
 
+const baseDir = process.pkg ? path.dirname(process.execPath) : __dirname;
 const MIME = {
     '.html': 'text/html',
     '.js': 'text/javascript',
@@ -49,8 +50,15 @@ http.createServer((req, res) => {
         return;
     }
 
-    const filePath = req.url === '/' ? '/index.html' : req.url;
-    const fullPath = path.join(__dirname, filePath);
+    let filePath;
+    if (req.url === '/' || req.url === '/hub') {
+        filePath = '/hub.html';
+    } else if (req.url === '/tcg' || req.url === '/tcg/' || req.url === '/index.html') {
+        filePath = '/index.html';
+    } else {
+        filePath = req.url;
+    }
+    const fullPath = path.join(baseDir, filePath);
     fs.readFile(fullPath, (err, data) => {
         if (err) {
             res.writeHead(404);
@@ -62,5 +70,5 @@ http.createServer((req, res) => {
         res.end(data);
     });
 }).listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Chini Hub running at http://localhost:${PORT}`);
 });
