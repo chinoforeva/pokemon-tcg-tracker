@@ -25,11 +25,10 @@ const MIME = {
 http.createServer((req, res) => {
     if (req.url.startsWith('/api/')) {
         const targetPath = req.url.replace('/api', '');
-        const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
         const options = new URL(API_BASE + targetPath);
         const proxyReq = https.request({
             hostname: options.hostname,
-            path: options.pathname + options.search + qs,
+            path: options.pathname + options.search,
             method: req.method,
             headers: {
                 'X-API-Key': API_KEY,
