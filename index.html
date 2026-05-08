@@ -475,11 +475,28 @@
     </div>
     <script>
         const EN_API = 'https://api.pokemontcg.io/v2';
-        const JP_API = 'https://api.tcgapi.dev/v1';
-        const TCG_API_KEY = 'tcg_live_7b9bf797b73c3fbe85ccaf8b1dd5998c8e24042f';
+        const JP_API = 'https://api.tcgdex.net/v2';
         const cardsPerPage = 100;
 
-        const CACHE_V = 'v7';
+        // Clean up old cache versions
+        (function cleanOldCache() {
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith('chini') && !k.includes('v5')) {
+                    keys.push(k);
+                }
+            }
+            keys.forEach(k => localStorage.removeItem(k));
+        })();
+
+        const CACHE_V = 'v6';
+        const JP_SETS_WITH_IMAGES = new Set([
+            'S12a','S9a','S9','S12',
+            'SV4a','SV7a','SV2P','SV8a','SV6','SVLS','SVK','SV5a',
+            'SV4K','SV8','SV9a','SV4M','SV3','SV2a','SV7','SVLN',
+            'SV5K','SV3a','SV1V','SV2D','SV1S','SV10','SV9'
+        ]);
         let currentLang = localStorage.getItem('chiniLang') || 'en';
 
         let allSets = [];
@@ -492,6 +509,7 @@
         let setCardsCache = JSON.parse(localStorage.getItem('chiniSetCardsCache_' + CACHE_V + '_' + currentLang) || '{}');
         let openPriceDropdown = null;
         let searchTimeout = null;
+        let setToSerie = {};
 
         function apiBase() { return currentLang === 'jp' ? JP_API : EN_API; }
 
@@ -527,24 +545,9 @@
         }
 
         async function apiFetchJP(endpoint) {
-            const r = await fetch(`${JP_API}${endpoint}`, { headers: { 'X-API-Key': TCG_API_KEY } });
-            if (r.status === 429) throw new Error('Rate limit exceeded. Please try again later.');
+            const r = await fetch(`${JP_API}${endpoint}`);
             if (!r.ok) throw new Error(`HTTP ${r.status} (${endpoint})`);
             return r.json();
-        }
-
-        async function paginatedFetchJP(baseEndpoint, maxPerPage = 100) {
-            let all = [];
-            let page = 1;
-            while (true) {
-                const sep = baseEndpoint.includes('?') ? '&' : '?';
-                const data = await apiFetchJP(`${baseEndpoint}${sep}per_page=${maxPerPage}&page=${page}`);
-                const items = data.data || [];
-                all = all.concat(items);
-                page++;
-                if (!data.meta?.has_more) break;
-            }
-            return all;
         }
 
         async function paginatedFetchEN(endpoint) {
@@ -565,6 +568,11 @@
             return all;
         }
 
+        async function paginatedFetchJP(endpoint) {
+            const data = await apiFetchJP(endpoint);
+            return Array.isArray(data) ? data : (data || []);
+        }
+
         function normalizeENCard(c) {
             return {
                 id: c.id, name: c.name || 'Unknown', number: c.number || '',
@@ -576,17 +584,30 @@
             };
         }
 
-        function normalizeJPCard(c, setSlug) {
+        function normalizeJPCard(c) {
+            const rawImage = c.image || '';
             return {
-                id: String(c.id), name: c.name || 'Unknown', number: c.number || '',
+                id: c.id, name: c.name || 'Unknown', number: c.localId || '',
                 rarity: c.rarity || '', variant: '',
-                image: c.image_url || '',
-                setSlug: setSlug || (c.set_slug || ''),
-                setName: c.set_name || '',
+                image: rawImage ? rawImage + '/high.webp' : '',
+                setSlug: c.set?.id || (currentSet ? currentSet.slug : ''),
+                setName: c.set?.name || (currentSet ? currentSet.name : ''),
                 tcgplayer: null,
-                pricing: null,
-                variants: null
+                pricing: c.pricing || null,
+                variants: c.variants || null
             };
+        }
+
+        function buildJPImageUrl(cardId, setId) {
+            const serie = setToSerie[setId] || '';
+            const parts = cardId.split('-');
+            const localId = parts[parts.length - 1];
+            return `https://assets.tcgdex.net/ja/${serie}/${setId}/${localId}/high.webp`;
+        }
+
+        function extractSeriePrefix(setId) {
+            const m = setId.match(/^([A-Za-z]+)/);
+            return m ? m[1] : '';
         }
 
         function fmt(n) {
@@ -711,14 +732,36 @@
                     allSets = JSON.parse(cached);
                 } else {
                     if (currentLang === 'jp') {
-                        const resp = await apiFetchJP('/games/pokemon-japan/sets');
-                        allSets = (resp.data || []).map(s => ({
-                            id: String(s.id), slug: String(s.id), name: s.name,
-                            cardCount: s.card_count || 0,
-                            releasedAt: s.release_date || '1900-01-01',
-                            logo: s.image_url || null,
-                            symbol: null
-                        }));
+                        const sets = await apiFetchJP('/ja/sets');
+                        const briefSets = sets
+                            .filter(s => JP_SETS_WITH_IMAGES.has(s.id))
+                            .map(s => ({
+                                id: s.id, slug: s.id, name: s.name,
+                                cardCount: s.cardCount?.total || 0,
+                                releasedAt: s.releaseDate || '1900-01-01',
+                                logo: s.logo || null,
+                                symbol: s.symbol || null
+                            }));
+                        el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><span>Fetching card details...</span></div>';
+                        const CHUNK = 10;
+                        for (let i = 0; i < briefSets.length; i += CHUNK) {
+                            const chunk = briefSets.slice(i, i + CHUNK);
+                            const results = await Promise.all(chunk.map(async (s) => {
+                                try {
+                                    const fullSet = await apiFetchJP(`/ja/sets/${s.id}`);
+                                    if (fullSet.serie?.id) setToSerie[s.slug] = fullSet.serie.id;
+                                    const withImage = fullSet.cards?.filter(c => c.image)?.length || 0;
+                                    return { ...s, cardCount: withImage };
+                                } catch {
+                                    return { ...s, cardCount: 0 };
+                                }
+                            }));
+                            for (const r of results) {
+                                const idx = briefSets.findIndex(b => b.slug === r.slug);
+                                if (idx !== -1) briefSets[idx] = r;
+                            }
+                        }
+                        allSets = briefSets.filter(s => s.cardCount > 0);
                         allSets.sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
                     } else {
                         const sets = await paginatedFetchEN('/sets');
@@ -745,8 +788,10 @@
             if (!sets.length) { el.innerHTML = '<div class="empty-state"><h3>No sets found</h3></div>'; return; }
             el.innerHTML = `<div class="expansions-grid">${sets.map(s => {
                 const owned = Object.values(collection).filter(c => c.setSlug === s.slug).length;
-                const logoHTML = s.logo
+                const logoHTML = currentLang === 'en' && s.logo
                     ? `<img src="${s.logo}" alt="${s.name}" onerror="this.style.display='none'" style="max-height:70px;max-width:85%;object-fit:contain;">`
+                    : s.symbol
+                    ? `<img src="${s.symbol}" alt="${s.name}" onerror="this.style.display='none'" style="max-height:70px;max-width:85%;object-fit:contain;">`
                     : `<span class="set-label">${s.name}</span>`;
                 return `<div class="expansion-card" onclick="openSet('${s.slug}')">
                     <div class="expansion-logo-wrap">${logoHTML}</div>
@@ -775,8 +820,10 @@
                     cards = cached;
                 } else {
                     if (currentLang === 'jp') {
-                        const raw = await paginatedFetchJP(`/sets/${encodeURIComponent(setSlug)}/cards?type=Cards`);
-                        cards = raw.map(c => normalizeJPCard(c, setSlug));
+                        const fullSet = await apiFetchJP(`/ja/sets/${encodeURIComponent(setSlug)}`);
+                        currentSet.name = fullSet.name || setObj?.name;
+                        if (fullSet.serie?.id) setToSerie[setSlug] = fullSet.serie.id;
+                        cards = fullSet.cards.map(normalizeJPCard).filter(c => c.image);
                     } else {
                         const raw = await paginatedFetchEN(`/cards?q=set.id:${encodeURIComponent(setSlug)}`);
                         cards = raw.filter(c => c.number && c.rarity).map(normalizeENCard);
@@ -933,8 +980,24 @@
                 try {
                     let cards;
                     if (currentLang === 'jp') {
-                        const resp = await apiFetchJP(`/search?game=pokemon-japan&q=${encodeURIComponent(q)}&per_page=100`);
-                        cards = (resp.data || []).map(c => normalizeJPCard(c));
+                        const allBrief = await apiFetchJP('/ja/cards');
+                        const lowerQ = q.toLowerCase();
+                        const filtered = allBrief.filter(c => {
+                            const setId = c.id.split('-').slice(0, -1).join('-');
+                            return JP_SETS_WITH_IMAGES.has(setId)
+                                && (c.name.toLowerCase().includes(lowerQ) || (c.localId && c.localId.includes(q)));
+                        });
+                        cards = filtered.map(c => {
+                            const setId = c.id.split('-').slice(0, -1).join('-');
+                            const serie = setToSerie[setId] || extractSeriePrefix(setId);
+                            const image = serie ? `https://assets.tcgdex.net/ja/${serie}/${setId}/${c.localId}/high.webp` : '';
+                            return {
+                                id: c.id, name: c.name || 'Unknown', number: c.localId || '',
+                                rarity: '', variant: '', image,
+                                setSlug: setId, setName: '',
+                                tcgplayer: null, pricing: null, variants: null
+                            };
+                        });
                     } else {
                         const raw = await paginatedFetchEN(`/cards?q=name:*${encodeURIComponent(q)}*`);
                         cards = raw.filter(c => c.number && c.rarity).map(normalizeENCard);
@@ -990,6 +1053,13 @@
                         for (const c of resp.data || []) {
                             pricingCache[c.id] = c.tcgplayer || null;
                         }
+                    } catch (e) { console.warn('Price fetch failed:', e); }
+                }
+            } else {
+                for (const id of ids) {
+                    try {
+                        const resp = await apiFetchJP(`/ja/cards/${encodeURIComponent(id)}`);
+                        if (resp.pricing) pricingCache[id] = resp.pricing;
                     } catch (e) { console.warn('Price fetch failed:', e); }
                 }
             }
